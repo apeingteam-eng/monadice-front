@@ -1,0 +1,157 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "@/state/store";
+import { setSearchQuery } from "@/state/uiSlice";
+import { useLogin } from "@/features/wallet/hooks/useLogin";
+import { useAccount, useDisconnect } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import CreateUserModal from "@/features/wallet/components/CreateUserModal";
+import { useRouter } from "next/navigation";
+
+export default function Header() {
+  const dispatch = useDispatch();
+  const query = useSelector((s: RootState) => s.ui.searchQuery);
+  const router = useRouter();
+
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { login } = useLogin();
+
+  const [showModal, setShowModal] = useState(false);
+  const [pendingWallet, setPendingWallet] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [didAuthThisSession, setDidAuthThisSession] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Detect token existence
+  const hasToken = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      !!localStorage.getItem("access_token"),
+    []
+  );
+
+  // Mark mounted after hydration
+  useEffect(() => setMounted(true), []);
+
+  // 🔐 Auto-run login AFTER wallet connects
+  useEffect(() => {
+    const run = async () => {
+      if (!isConnected || !address) return;
+      if (hasToken || didAuthThisSession) return;
+
+      const res = await login();
+      if (res.status === "pending_username") {
+        setPendingWallet(res.walletAddress);
+        setShowModal(true);
+        setDidAuthThisSession(false);
+      } else if (res.status === "success") {
+        setDidAuthThisSession(true);
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("wallet_address");
+    setDidAuthThisSession(false);
+    setMenuOpen(false);
+    disconnect();
+  };
+
+  if (!mounted) return null;
+
+  // Try getting stored profile photo (optional)
+  const profileImage =
+  (typeof window !== "undefined" && localStorage.getItem("profile_image")) ||
+  "/PP.png";
+
+  return (
+    <>
+      <header className="w-full sticky top-0 z-40 border-b border-neutral-800/60 bg-black/60 backdrop-blur supports-[backdrop-filter]:bg-black/40">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+          {/* Brand */}
+          <Link href="/" className="flex items-center gap-2 text-white">
+            <div className="h-6 w-6 rounded bg-accentPurple grid place-items-center text-[10px] font-bold shadow-[0_0_20px_rgba(155,93,229,0.35)]">
+              M
+            </div>
+            <span className="text-sm font-semibold tracking-wide">
+              Monadice
+            </span>
+          </Link>
+
+          {/* Search */}
+          <div className="flex-1 flex justify-center">
+            <div className="w-full max-w-xl">
+              <input
+                value={query}
+                onChange={(e) => dispatch(setSearchQuery(e.target.value))}
+                type="text"
+                placeholder="Search markets"
+                className="w-full rounded-md border border-neutral-800 bg-neutral-900/70 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-accentPurple/50 focus:border-accentPurple/50"
+              />
+            </div>
+          </div>
+
+          {/* Right: Wallet & Menu */}
+          <div className="ml-auto flex items-center gap-3 relative">
+            <ConnectButton chainStatus="icon" showBalance={false} />
+
+            {isConnected && (
+              <>
+                {/* Profile circle instead of address text */}
+                <button
+                  onClick={() => setMenuOpen((s) => !s)}
+                  className="w-8 h-8 rounded-full overflow-hidden border border-neutral-700 hover:border-accentPurple transition-all"
+                >
+                  <img
+                    src={profileImage}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+
+                {menuOpen && (
+                  <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
+                    <button
+                      onClick={() => {
+                        router.push("/profile");
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-neutral-800"
+                    >
+                      Profile
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-neutral-800"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Username modal (shown if backend says pending_username) */}
+      {showModal && pendingWallet && (
+        <CreateUserModal
+          walletAddress={pendingWallet}
+          onSuccess={() => {
+            setShowModal(false);
+            setDidAuthThisSession(true);
+          }}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
+  );
+}
