@@ -2,12 +2,15 @@
   "name": "monadicefrontend",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+"scripts": {
   "dev": "next dev --turbopack",
-  "build": "next build --turbopack && next export",
+  "build": "next build",
+  "export": "next build && next export",
   "start": "next start",
-  "lint": "eslint"
+  "lint": "next lint"
 }
+
+
 ,
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.9",
