@@ -5,7 +5,4 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# 🚫 Disable the Next.js plugin since it conflicts with SSR + wallet hooks
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-  enabled = false
+# Do NOT use [[plugins]] block at all — we skip plugin registration
