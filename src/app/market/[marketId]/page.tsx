@@ -1,12 +1,14 @@
-// Dummy data for now
-// TODO: integrate real API
-// TODO: integrate on-chain contract call via ethers on the action button
+// src/app/market/[marketId]/page.tsx
 import { getDummyMarketById } from "@/data/dummyMarkets";
 
-type Props = { params: { marketId: string } };
+export default async function MarketPage({
+  params,
+}: {
+  params: Promise<{ marketId: string }>;
+}) {
+  const { marketId } = await params; // ✅ await it
+  const market = getDummyMarketById(marketId);
 
-export default function MarketPage({ params }: Props) {
-  const market = getDummyMarketById(params.marketId);
   if (!market) {
     return (
       <div className="container mx-auto p-6">
@@ -15,19 +17,27 @@ export default function MarketPage({ params }: Props) {
     );
   }
 
-  const handlePlaceBet = async (formData: FormData) => {
-    'use server';
-    const amount = formData.get("amount");
-    const outcome = formData.get("outcome");
-    // TODO: integrate on-chain contract call via ethers on the action button
-    console.log("place bet:", { marketId: market.id, amount, outcome });
-  };
+const handlePlaceBet = async (formData: FormData) => {
+  "use server";
+  const amount = formData.get("amount");
+  const outcome = formData.get("outcome");
+
+  // Already safe because market is checked earlier
+  console.log("place bet:", { marketId: market!.id, amount, outcome });
+};
+
 
   return (
     <div className="container mx-auto p-0 md:p-6">
       {/* Gradient header */}
       <div className="relative overflow-hidden">
-        <div className="h-40 md:h-56 w-full grid place-items-center" style={{ background: 'linear-gradient(135deg, #9b5de5 0%, #7a4edb 100%)' }}>
+        <div
+          className="h-40 md:h-56 w-full grid place-items-center"
+          style={{
+            background:
+              "linear-gradient(135deg, #9b5de5 0%, #7a4edb 100%)",
+          }}
+        >
           <span className="text-white/90 text-sm">Market</span>
         </div>
       </div>
@@ -40,11 +50,13 @@ export default function MarketPage({ params }: Props) {
               {market.category}
             </span>
             <span className="text-xs text-neutral-500">
-              Expires in ~3d 4h {/* dummy countdown */}
+              Expires in ~3d 4h
             </span>
           </div>
           <h1 className="text-2xl font-semibold">{market.title}</h1>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">{market.description}</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            {market.description}
+          </p>
 
           {/* Outcomes */}
           <div className="space-y-2">
@@ -66,36 +78,58 @@ export default function MarketPage({ params }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-md border border-neutral-800 bg-neutral-900 p-3 text-sm">
               <div className="text-xs text-neutral-500">Volume</div>
-              <div className="font-semibold">${(market.volumeUsd / 1_000_000).toFixed(1)}m</div>
+              <div className="font-semibold">
+                ${(market.volumeUsd / 1_000_000).toFixed(1)}m
+              </div>
             </div>
             <div className="rounded-md border border-neutral-800 bg-neutral-900 p-3 text-sm">
               <div className="text-xs text-neutral-500">Total bets</div>
-              <div className="font-semibold">{market.totalBets.toLocaleString()}</div>
+              <div className="font-semibold">
+                {market.totalBets.toLocaleString()}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Right: place bet */}
         <div className="md:col-span-1">
-          <form action={handlePlaceBet} className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 space-y-3">
+          <form
+            action={handlePlaceBet}
+            className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 space-y-3"
+          >
             <h3 className="text-base font-semibold">Place Bet</h3>
             <label className="text-sm">Outcome</label>
-            <select name="outcome" className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50">
+            <select
+              name="outcome"
+              className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50"
+            >
               {market.outcomes.map((o) => (
-                <option key={o.label} value={o.label}>{o.label}</option>
+                <option key={o.label} value={o.label}>
+                  {o.label}
+                </option>
               ))}
             </select>
             <label className="text-sm">Amount</label>
-            <input name="amount" type="number" min="0" step="0.01" placeholder="0.00" className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50" />
-            <button type="submit" className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-4 py-2 text-sm font-medium">
+            <input
+              name="amount"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-4 py-2 text-sm font-medium"
+            >
               Place Bet
             </button>
-            <p className="text-xs text-neutral-500">{/* TODO: integrate on-chain contract call via ethers on the action button */}</p>
+            <p className="text-xs text-neutral-500">
+              {/* TODO: integrate on-chain contract call via ethers */}
+            </p>
           </form>
         </div>
       </div>
     </div>
   );
 }
-
-
