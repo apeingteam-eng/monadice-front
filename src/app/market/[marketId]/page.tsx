@@ -1,6 +1,12 @@
 // src/app/market/[marketId]/page.tsx
 import { getDummyMarketById } from "@/data/dummyMarkets";
-
+export async function generateStaticParams() {
+  return [
+    { marketId: "1" },
+    { marketId: "2" },
+    { marketId: "3" },
+  ];
+}
 export default async function MarketPage({
   params,
 }: {
