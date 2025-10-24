@@ -1,6 +1,10 @@
-export default function ProfileHeader() {
-  const username = "monadice_user";
-  const address = "0x1234...abcd";
+// src/features/user/components/ProfileHeader.tsx
+interface ProfileHeaderProps {
+  username: string;
+  walletAddress: string;
+}
+
+export default function ProfileHeader({ username, walletAddress }: ProfileHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -13,13 +17,13 @@ export default function ProfileHeader() {
           <h1 className="text-2xl font-semibold leading-tight">{username}</h1>
           <span className="inline-flex items-center gap-2 mt-1 px-2 py-0.5 rounded-md border border-neutral-800 bg-neutral-900 text-xs text-neutral-300">
             <span className="h-2 w-2 rounded-full bg-accentPurple" />
-            {address}
+            {walletAddress}
           </span>
         </div>
       </div>
-      <button className="rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-3 py-2 text-xs font-medium">Edit Profile</button>
+      <button className="rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-3 py-2 text-xs font-medium">
+        Edit Profile
+      </button>
     </div>
   );
 }
-
-

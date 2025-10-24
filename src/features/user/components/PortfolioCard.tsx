@@ -1,18 +1,21 @@
-export default function PortfolioCard() {
-  const portfolioValue = 12500.45;
-  const cash = 3200.0;
+// src/features/user/components/PortfolioCard.tsx
+type PortfolioCardProps = {
+  totalStaked: number;
+  totalClaimed: number;
+};
+
+export default function PortfolioCard({ totalStaked, totalClaimed }: PortfolioCardProps) {
+  const portfolioValue = totalStaked + totalClaimed;
+
   return (
-    <div className="rounded-xl p-[1px] bg-gradient-to-br from-accentPurple to-[#7a4edb]">
-      <div className="rounded-xl border border-neutral-900 bg-neutral-950 p-4">
-        <div className="text-xs uppercase tracking-wide text-accentPurple">Portfolio Value</div>
-      <div className="text-2xl font-semibold mb-2">${portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-neutral-400">Cash</span>
-        <span>${cash.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+    <div className="rounded-xl border border-accentPurple/40 bg-neutral-900 p-4 text-center">
+      <div className="text-xs uppercase text-accentPurple tracking-wide mb-1">
+        Portfolio Value
       </div>
+      <div className="text-2xl font-semibold text-white">
+        ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
       </div>
+      <div className="text-sm text-neutral-400 mt-1">Cash ${totalClaimed.toLocaleString()}</div>
     </div>
   );
 }
-
-

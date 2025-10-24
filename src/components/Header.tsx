@@ -26,18 +26,15 @@ export default function Header() {
   const [didAuthThisSession, setDidAuthThisSession] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Detect token existence
   const hasToken = useMemo(
-    () =>
-      typeof window !== "undefined" &&
-      !!localStorage.getItem("access_token"),
+    () => typeof window !== "undefined" && !!localStorage.getItem("access_token"),
     []
   );
 
-  // Mark mounted after hydration
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  // 🔐 Auto-run login AFTER wallet connects
   useEffect(() => {
     const run = async () => {
       if (!isConnected || !address) return;
@@ -66,24 +63,23 @@ export default function Header() {
 
   if (!mounted) return null;
 
-  // Try getting stored profile photo (optional)
   const profileImage =
-  (typeof window !== "undefined" && localStorage.getItem("profile_image")) ||
-  "/PP.png";
+    (typeof window !== "undefined" && localStorage.getItem("profile_image")) ||
+    "/PP.png";
 
   return (
     <>
       <header className="w-full sticky top-0 z-40 border-b border-neutral-800/60 bg-black/60 backdrop-blur supports-[backdrop-filter]:bg-black/40">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
           {/* Brand */}
-          <Link href="/" className="flex items-center gap-2 text-white">
-            <div className="h-6 w-6 rounded bg-accentPurple grid place-items-center text-[10px] font-bold shadow-[0_0_20px_rgba(155,93,229,0.35)]">
-              M
-            </div>
-            <span className="text-sm font-semibold tracking-wide">
-              Monadice
-            </span>
-          </Link>
+          {/* Brand */}
+<Link href="/" className="flex items-center gap-2">
+  <img
+    src="/monadiceLogoText.png"
+    alt="Monadice"
+    className="h-8 w-auto object-contain"
+  />
+</Link>
 
           {/* Search */}
           <div className="flex-1 flex justify-center">
@@ -100,48 +96,77 @@ export default function Header() {
 
           {/* Right: Wallet & Menu */}
           <div className="ml-auto flex items-center gap-3 relative">
-            <ConnectButton chainStatus="icon" showBalance={false} />
+            <ConnectButton.Custom>
+              {({
+                account,
+                chain,
+                openConnectModal,
+                authenticationStatus,
+                mounted: buttonMounted,
+              }) => {
+                const ready = buttonMounted && authenticationStatus !== "loading";
+                const connected =
+                  ready &&
+                  account &&
+                  chain &&
+                  (!authenticationStatus || authenticationStatus === "authenticated");
 
-            {isConnected && (
-              <>
-                {/* Profile circle instead of address text */}
-                <button
-                  onClick={() => setMenuOpen((s) => !s)}
-                  className="w-8 h-8 rounded-full overflow-hidden border border-neutral-700 hover:border-accentPurple transition-all"
-                >
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-
-                {menuOpen && (
-                  <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
+                if (!connected || !account) {
+                  return (
                     <button
-                      onClick={() => {
-                        router.push("/profile");
-                        setMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-neutral-800"
+                      type="button"
+                      onClick={openConnectModal}
+                      className="rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-3 py-2 text-xs font-medium"
                     >
-                      Profile
+                      Connect Wallet
                     </button>
+                  );
+                }
+
+                return (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-neutral-300">
+                      {account.address.slice(0, 6)}…{account.address.slice(-4)}
+                    </span>
                     <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-neutral-800"
+                      type="button"
+                      onClick={() => setMenuOpen((s) => !s)}
+                      className="w-8 h-8 rounded-full overflow-hidden border border-neutral-700 hover:border-accentPurple transition-all"
                     >
-                      Logout
+                      <img
+                        src={profileImage}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
                     </button>
                   </div>
-                )}
-              </>
+                );
+              }}
+            </ConnectButton.Custom>
+
+            {isConnected && menuOpen && (
+              <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden">
+                <button
+                  onClick={() => {
+                    router.push("/profile");
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-neutral-800"
+                >
+                  Profile
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-neutral-800"
+                >
+                  Logout
+                </button>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      {/* Username modal (shown if backend says pending_username) */}
       {showModal && pendingWallet && (
         <CreateUserModal
           walletAddress={pendingWallet}
