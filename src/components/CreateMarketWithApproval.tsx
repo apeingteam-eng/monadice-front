@@ -1,13 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWalletClient, useSwitchChain, useChainId } from "wagmi";
-import {
-  BrowserProvider,
-  Contract,
-  formatUnits,
-  JsonRpcSigner,
-} from "ethers";
+import { useAccount, useWalletClient, useChainId } from "wagmi";
+import { BrowserProvider, Contract, JsonRpcSigner } from "ethers";
 import type { Eip1193Provider } from "ethers";
 
 import { BetMarketFactoryABI, ERC20ABI } from "@/lib/ethers/abi";
@@ -25,7 +20,6 @@ const TARGET_CHAIN_ID = 84532;
 export default function CreateMarketTwoStep() {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const { switchChain } = useSwitchChain();
   const chainId = useChainId();
 
   const [signer, setSigner] = useState<JsonRpcSigner | null>(null);
@@ -47,6 +41,7 @@ export default function CreateMarketTwoStep() {
         setSigner(null);
         return;
       }
+
       const provider = new BrowserProvider(walletClient.transport as Eip1193Provider);
       const s = await provider.getSigner(address);
       setSigner(s);
@@ -58,30 +53,38 @@ export default function CreateMarketTwoStep() {
   useEffect(() => {
     async function checkAllowance() {
       if (!signer || !address) return;
+
       const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
-      const allowance = await usdc.allowance(address, FACTORY_ADDRESS);
+      const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
 
       setAllowanceEnough(allowance >= REQUIRED_USDC);
     }
+
     checkAllowance();
   }, [signer, address]);
 
   /* ---------------------------- Approve Logic ------------------------------ */
   const handleApprove = async () => {
+    if (!signer) {
+      setError("Wallet not ready.");
+      return;
+    }
+
     setError(null);
     setStatus("Approving USDC…");
     setLoading(true);
 
     try {
-      const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer!);
+      const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
 
       const tx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
       await tx.wait();
 
       setStatus("USDC approved!");
       setAllowanceEnough(true);
-    } catch (err: any) {
-      setError(err.message ?? "Approve failed.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Approve failed.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -89,77 +92,55 @@ export default function CreateMarketTwoStep() {
 
   /* ---------------------------- Create Campaign ---------------------------- */
   const handleCreateMarket = async () => {
-  setError(null);
-  setStatus(null);
-  setTxHash(null);
+    setError(null);
+    setStatus(null);
+    setTxHash(null);
 
-  if (!name.trim()) return setError("Market name required.");
-  if (!endTime) return setError("End time required.");
-  if (chainId !== TARGET_CHAIN_ID) return setError("Wrong network.");
+    if (!signer) return setError("Wallet not ready.");
+    if (!isConnected) return setError("Wallet not connected.");
+    if (chainId !== TARGET_CHAIN_ID) return setError("Wrong network.");
+    if (!name.trim()) return setError("Market name required.");
+    if (!endTime) return setError("End time required.");
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const factory = new Contract(
-      FACTORY_ADDRESS,
-      BetMarketFactoryABI,
-      signer!
-    );
+    try {
+      const unixEnd = Math.floor(new Date(endTime).getTime() / 1000);
+      const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
 
-    const unixEnd = Math.floor(new Date(endTime).getTime() / 1000);
+      setStatus("Creating market…");
+      const tx = await factory.createCampaign(name, category, unixEnd, 200);
 
-    // -------------------------
-    // CREATE CAMPAIGN
-    // -------------------------
-    setStatus("Creating market…");
+      setStatus("Waiting for confirmation…");
+      const receipt = await tx.wait();
 
-    const tx = await factory.createCampaign(
-      name,
-      category,
-      unixEnd,
-      200 // fee bps
-    );
+      setTxHash(receipt.hash);
+      setStatus("Market created on-chain!");
 
-    setStatus("Waiting for confirmation…");
-    const receipt = await tx.wait();
+      // SYNC BACKEND
+      setStatus("Syncing backend…");
 
-    setTxHash(receipt.hash);
-    setStatus("Market created on-chain!");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
+      if (!res.ok) {
+        setStatus("Market created but backend sync failed.");
+        return;
+      }
 
-    // -------------------------
-    // SYNC BACKEND
-    // -------------------------
-    setStatus("Syncing backend…");
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/factory/sync`,
-      { method: "GET" }
-    );
-
-    if (!res.ok) {
-      setStatus("Market created but backend sync failed.");
-      console.warn("Sync error:", await res.text());
-      return;
+      setStatus("Backend synced successfully! 🎉");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Create failed.";
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setStatus("Backend synced successfully! 🎉");
-
-    // OPTIONAL: redirect after sync
-    // router.push("/markets");
-
-  } catch (err: any) {
-    console.error(err);
-    setError(err.message ?? "Create failed.");
-  } finally {
-    setLoading(false);
-  }
-};
   /* ------------------------------ UI -------------------------------------- */
   return (
     <form className="space-y-5 p-6 bg-neutral-900 border border-neutral-800 rounded-xl">
       <h2 className="text-white text-lg font-semibold">Create Market</h2>
 
-      {/* TITLE */}
+      {/* Title */}
       <div>
         <label className="text-neutral-400 text-sm">Market Name</label>
         <input
@@ -169,7 +150,7 @@ export default function CreateMarketTwoStep() {
         />
       </div>
 
-      {/* CATEGORY */}
+      {/* Category */}
       <div>
         <label className="text-neutral-400 text-sm">Category</label>
         <select
@@ -183,7 +164,7 @@ export default function CreateMarketTwoStep() {
         </select>
       </div>
 
-      {/* TIME */}
+      {/* End Time */}
       <div>
         <label className="text-neutral-400 text-sm">End Time</label>
         <input
@@ -194,7 +175,7 @@ export default function CreateMarketTwoStep() {
         />
       </div>
 
-      {/* BUTTON LOGIC */}
+      {/* Buttons */}
       {!allowanceEnough ? (
         <button
           type="button"

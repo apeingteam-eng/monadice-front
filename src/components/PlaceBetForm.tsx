@@ -10,13 +10,20 @@ import { useToast } from "@/components/toast/ToastContext";
 
 const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const USDC_DECIMALS = 6;
-const TARGET_CHAIN_ID = 84532; // Base Sepolia
+const TARGET_CHAIN_ID = 84532;
 
 type Props = {
   campaignAddress: string;
   bettingClosed: boolean;
 };
-export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) {  const toast = useToast();
+
+type PayoutResponse = {
+  potential_payout: number;
+  estimated_profit: number;
+};
+
+export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) {
+  const toast = useToast();
 
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -24,59 +31,65 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
   const [outcome, setOutcome] = useState<"Yes" | "No">("Yes");
   const [amount, setAmount] = useState("");
-  const [potentialPayout, setPotentialPayout] = useState<string | null>(null);
+  const [payoutData, setPayoutData] = useState<PayoutResponse | null>(null);
   const [fetchingPayout, setFetchingPayout] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  /* -------------------------------------------------------------------------- */
-  /*                 🔮 Fetch dynamic payout preview from backend               */
-  /* -------------------------------------------------------------------------- */
-  
+  /* --------------------- Fetch payout preview ----------------------------- */
   useEffect(() => {
     if (!amount || Number(amount) <= 0) {
-      setPotentialPayout(null);
+      setPayoutData(null);
       return;
     }
 
     const controller = new AbortController();
-    const debounce = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
       try {
         setFetchingPayout(true);
 
         const side = outcome === "Yes";
+
         const url = `${process.env.NEXT_PUBLIC_API_URL}/bet/potential-payout?campaign_address=${campaignAddress}&side=${side}&amount=${amount}`;
 
         const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error("Payout fetch failed");
+        if (!res.ok) throw new Error("Failed to fetch payout");
 
-        const data = await res.json();
-        setPotentialPayout(data);
-      } catch {
-        setPotentialPayout(null);
+        // 👇 Correct shape
+        const json = (await res.json()) as PayoutResponse;
+
+        if (
+          typeof json.potential_payout === "number" &&
+          typeof json.estimated_profit === "number"
+        ) {
+          setPayoutData(json);
+        } else {
+          console.error("Unexpected payout format:", json);
+          setPayoutData(null);
+        }
+      } catch (err) {
+        setPayoutData(null);
       } finally {
         setFetchingPayout(false);
       }
-    }, 400);
+    }, 350);
 
     return () => {
-      clearTimeout(debounce);
+      clearTimeout(timeout);
       controller.abort();
     };
   }, [amount, outcome, campaignAddress]);
 
-  /* -------------------------------------------------------------------------- */
-  /*                                🪙 Place Bet                                 */
-  /* -------------------------------------------------------------------------- */
-   if (bettingClosed) {
+  /* --------------------------- Betting Closed ------------------------------ */
+  if (bettingClosed) {
     return (
       <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 text-center">
         <h3 className="text-base font-semibold mb-2">Place Bet</h3>
-        <p className="text-neutral-400 text-sm">
-          This market is closed for betting.
-        </p>
+        <p className="text-neutral-400 text-sm">This market is closed for betting.</p>
       </div>
     );
   }
+
+  /* --------------------------- Place Bet ---------------------------------- */
   const handlePlaceBet = async () => {
     if (!isConnected || !walletClient || !address) {
       toast.error("Wallet not connected.");
@@ -89,14 +102,13 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
     }
 
     if (!amount || Number(amount) <= 0) {
-      toast.error("Enter a valid USDC bet amount.");
+      toast.error("Enter a valid amount.");
       return;
     }
 
     try {
       setLoading(true);
 
-      // Provider + Signer
       const provider = new BrowserProvider(walletClient.transport as Eip1193Provider);
       const signer = await provider.getSigner(address);
 
@@ -105,94 +117,60 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
       const parsedAmount = parseUnits(amount, USDC_DECIMALS);
 
-      /* ------------------------------ Check Allowance ------------------------------ */
-      toast.info("Checking allowance…");
+      toast.info("Checking allowance...");
 
-      const allowance = await usdc.allowance(address, campaignAddress);
+      const allowance: bigint = await usdc.allowance(address, campaignAddress);
       if (allowance < parsedAmount) {
-        toast.info("Approving USDC…");
-
-        const approveTx = await usdc.approve(campaignAddress, parsedAmount);
-        await approveTx.wait();
-
+        const tx = await usdc.approve(campaignAddress, parsedAmount);
+        await tx.wait();
         toast.success("USDC approved!");
       }
 
-      /* ------------------------------- Place Bet ---------------------------------- */
+      toast.info("Placing bet...");
       const side = outcome === "Yes" ? 1 : 0;
 
-      toast.info("Placing bet on-chain…");
-
       const tx = await campaign.join(side, parsedAmount);
-      const receipt = await tx.wait();
+      await tx.wait();
 
-      toast.success("Bet placed successfully!");
+      toast.success("Bet placed!");
 
-      /* ------------------------------ Backend Sync --------------------------------- */
+      // Sync backend
       try {
-        toast.info("Syncing bet with backend…");
-
         const sync = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/bet/sync-bets?campaign_address=${campaignAddress}`
         );
-
         if (!sync.ok) throw new Error("Sync failed");
-        toast.success("Bet synced with backend!");
+        toast.success("Synced with backend!");
       } catch {
-        toast.error("Bet placed, but backend sync failed. Refresh manually.");
+        toast.error("Bet placed, but backend sync failed.");
       }
     } catch (err: unknown) {
-  console.error("Bet error:", err);
+      console.error("Bet error:", err);
 
-  // Extract a safe human-readable message
-  const errMsg =
-    err instanceof Error ? err.message : String(err ?? "Transaction failed");
+      const msg =
+        err instanceof Error ? err.message : String(err ?? "Transaction failed");
 
-  // MetaMask rejection (basic)
-  if (typeof err === "object" && err && "code" in err && (err as any).code === 4001) {
-    toast.error("Transaction cancelled.");
-    return;
-  }
+      if (msg.includes("transfer amount exceeds balance")) {
+        toast.error("Not enough USDC.");
+        return;
+      }
 
-  // ethers.js nested structure
-  const reason =
-    (err as any)?.reason ||
-    (err as any)?.info?.error?.message ||
-    errMsg;
+      if (msg.includes("4001") || msg.toLowerCase().includes("cancel")) {
+        toast.error("Transaction cancelled.");
+        return;
+      }
 
-  // Insufficient USDC
-  if (reason?.includes("transfer amount exceeds balance")) {
-    toast.error("You don't have enough USDC to place this bet.");
-    return;
-  }
-
-  // Approval cancelled
-  if (reason?.toLowerCase().includes("approve")) {
-    toast.error("Approval cancelled.");
-    return;
-  }
-
-  // Generic "denied" rejection
-  if (reason?.toLowerCase().includes("denied")) {
-    toast.error("You cancelled the transaction.");
-    return;
-  }
-
-  // fallback
-  toast.error(reason);
-} finally {
+      toast.error(msg);
+    } finally {
       setLoading(false);
     }
   };
 
-  /* -------------------------------------------------------------------------- */
-  /*                                   UI                                       */
-  /* -------------------------------------------------------------------------- */
+  /* ----------------------------- UI --------------------------------------- */
   return (
-    <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 space-y-3">
+    <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 space-y-4">
       <h3 className="text-base font-semibold">Place Bet</h3>
 
-      {/* Outcome Selector */}
       <label className="text-sm">Outcome</label>
       <select
         value={outcome}
@@ -203,45 +181,41 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
         <option value="No">No</option>
       </select>
 
-      {/* Amount */}
       <label className="text-sm">Amount (USDC)</label>
       <input
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
         type="number"
-        min="0"
-        step="0.01"
-        placeholder="0.00"
         className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm"
       />
 
-      {/* Payout */}
+      {/* ----------- Payout Section ----------- */}
       {fetchingPayout ? (
         <p className="text-xs text-neutral-500">Calculating payout…</p>
-      ) : potentialPayout ? (
-        <div className="text-sm text-neutral-300">
-          <span className="font-medium text-accentPurple">Potential Payout:</span>{" "}
-          ${Number(potentialPayout).toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}
+      ) : payoutData ? (
+        <div className="text-sm text-neutral-300 space-y-1">
+          <div>
+            <span className="font-medium text-accentPurple">Potential Payout: </span>
+            ${payoutData.potential_payout.toFixed(3)}
+          </div>
+          <div>
+            <span className="font-medium text-neutral-400">Estimated Profit: </span>
+            {payoutData.estimated_profit >= 0 ? "+" : ""}
+            {payoutData.estimated_profit.toFixed(3)} USDC
+          </div>
         </div>
       ) : null}
 
-      {/* Place Bet Button */}
       <button
         onClick={handlePlaceBet}
         disabled={loading}
-        className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-4 py-2 text-sm font-medium disabled:opacity-50"
+        className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white py-2 text-sm font-medium disabled:opacity-50"
       >
         {loading ? "Processing…" : "Place Bet"}
       </button>
 
       <p className="text-xs text-neutral-500">
-        Market:{" "}
-        <span className="font-mono">
-          {campaignAddress.slice(0, 6)}…{campaignAddress.slice(-4)}
-        </span>
+        Market: {campaignAddress.slice(0, 6)}…{campaignAddress.slice(-4)}
       </p>
     </div>
   );
