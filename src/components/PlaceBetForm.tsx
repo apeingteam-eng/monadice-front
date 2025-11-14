@@ -31,16 +31,7 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
   /* -------------------------------------------------------------------------- */
   /*                 🔮 Fetch dynamic payout preview from backend               */
   /* -------------------------------------------------------------------------- */
-   if (bettingClosed) {
-    return (
-      <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 text-center">
-        <h3 className="text-base font-semibold mb-2">Place Bet</h3>
-        <p className="text-neutral-400 text-sm">
-          This market is closed for betting.
-        </p>
-      </div>
-    );
-  }
+  
   useEffect(() => {
     if (!amount || Number(amount) <= 0) {
       setPotentialPayout(null);
@@ -76,7 +67,16 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
   /* -------------------------------------------------------------------------- */
   /*                                🪙 Place Bet                                 */
   /* -------------------------------------------------------------------------- */
-  
+   if (bettingClosed) {
+    return (
+      <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 text-center">
+        <h3 className="text-base font-semibold mb-2">Place Bet</h3>
+        <p className="text-neutral-400 text-sm">
+          This market is closed for betting.
+        </p>
+      </div>
+    );
+  }
   const handlePlaceBet = async () => {
     if (!isConnected || !walletClient || !address) {
       toast.error("Wallet not connected.");
@@ -97,9 +97,7 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
       setLoading(true);
 
       // Provider + Signer
-      const provider = new BrowserProvider(
-        walletClient.transport as unknown as Eip1193Provider
-      );
+      const provider = new BrowserProvider(walletClient.transport as Eip1193Provider);
       const signer = await provider.getSigner(address);
 
       const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
@@ -143,42 +141,45 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
       } catch {
         toast.error("Bet placed, but backend sync failed. Refresh manually.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
   console.error("Bet error:", err);
 
-  // 🛑 Direct MetaMask cancel
-  if (err?.code === 4001) {
+  // Extract a safe human-readable message
+  const errMsg =
+    err instanceof Error ? err.message : String(err ?? "Transaction failed");
+
+  // MetaMask rejection (basic)
+  if (typeof err === "object" && err && "code" in err && (err as any).code === 4001) {
     toast.error("Transaction cancelled.");
     return;
   }
 
-  // 🛑 Ethers structured cancel error
-  if (err?.info?.error?.code === 4001) {
-    toast.error("Transaction cancelled.");
-    return;
-  }
-if (
-    err?.reason === "ERC20: transfer amount exceeds balance" ||
-    err?.info?.error?.message?.includes("transfer amount exceeds balance") ||
-    err?.message?.includes("transfer amount exceeds balance")
-  ) {
+  // ethers.js nested structure
+  const reason =
+    (err as any)?.reason ||
+    (err as any)?.info?.error?.message ||
+    errMsg;
+
+  // Insufficient USDC
+  if (reason?.includes("transfer amount exceeds balance")) {
     toast.error("You don't have enough USDC to place this bet.");
     return;
   }
-  // 🛑 Approval-specific cancel
-  if (err?.message?.toLowerCase().includes("approve")) {
+
+  // Approval cancelled
+  if (reason?.toLowerCase().includes("approve")) {
     toast.error("Approval cancelled.");
     return;
   }
 
-  // 🛑 Generic cancel message
-  if (err?.message?.toLowerCase().includes("denied")) {
+  // Generic "denied" rejection
+  if (reason?.toLowerCase().includes("denied")) {
     toast.error("You cancelled the transaction.");
     return;
   }
 
-  // Default error fallback
-  toast.error(err?.message || "Transaction failed.");
+  // fallback
+  toast.error(reason);
 } finally {
       setLoading(false);
     }
@@ -195,7 +196,7 @@ if (
       <label className="text-sm">Outcome</label>
       <select
         value={outcome}
-        onChange={(e) => setOutcome(e.target.value as any)}
+        onChange={(e) => setOutcome(e.target.value as "Yes" | "No")}
         className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm"
       >
         <option value="Yes">Yes</option>
