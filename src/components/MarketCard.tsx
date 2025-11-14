@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-
-export type MarketOutcome = {
-  label: string;
-  percent: number; // 0–100
-};
+import { useEffect, useState } from "react";
+import { Contract, JsonRpcProvider } from "ethers";
+import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
+import { CHAIN } from "@/config/network"; // <-- uses your network.ts
 
 export type MarketSummary = {
   id: number;
@@ -15,18 +14,16 @@ export type MarketSummary = {
   fee_bps: number;
   state: string;
   campaign_address: string;
-  volumeUsd?: number;
-  outcomes?: MarketOutcome[];
 };
 
-function formatUsdShort(value: number) {
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}b`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}m`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return `$${value.toFixed(0)}`;
+// ---- Format numbers like $1.3k, $950k, $1.9m ----
+function formatUsdShort(n: number) {
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}b`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}m`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}k`;
+  return `$${n.toFixed(0)}`;
 }
 
-// Convert unix timestamp to “Ends in Xh Ymin” format
 function formatCountdown(endUnix: number): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = Math.max(endUnix - now, 0);
@@ -42,13 +39,54 @@ type Props = {
 };
 
 export default function MarketCard({ market }: Props) {
-  const volume = market.volumeUsd ?? 190_000_000; // placeholder
-  const outcomes =
-    market.outcomes ?? [
-      { label: "Yes", percent: 91 },
-      { label: "No", percent: 9 },
-    ];
+  const [yesPercent, setYesPercent] = useState(50);
+  const [noPercent, setNoPercent] = useState(50);
+  const [volume, setVolume] = useState(0);
 
+  useEffect(() => {
+    async function loadOnchainData() {
+      try {
+        // 🔥 Use the RPC from network.ts (Base Sepolia currently)
+        const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+
+        const contract = new Contract(
+          market.campaign_address,
+          BetCampaignABI,
+          provider
+        );
+
+        const [tTrueRaw, tFalseRaw, tPotRaw] = await Promise.all([
+          contract.totalTrue(),
+          contract.totalFalse(),
+          contract.totalInitialPot(),
+        ]);
+
+        // Convert USDC (6 decimals) → human number
+        const trueNum = Number(tTrueRaw) / 1e6;
+        const falseNum = Number(tFalseRaw) / 1e6;
+        const potNum = Number(tPotRaw) / 1e6;
+
+        const totalVotes = trueNum + falseNum;
+
+        if (totalVotes > 0) {
+          setYesPercent(Math.round((trueNum / totalVotes) * 100));
+          setNoPercent(Math.round((falseNum / totalVotes) * 100));
+        } else {
+          setYesPercent(50);
+          setNoPercent(50);
+        }
+
+        // Total market volume
+        setVolume(trueNum + falseNum + potNum);
+      } catch (err) {
+        console.error("Failed to load on-chain data:", err);
+      }
+    }
+
+    loadOnchainData();
+  }, [market.campaign_address]);
+
+  // ---- Status label ----
   const now = Math.floor(Date.now() / 1000);
   const isEnded = market.end_time <= now;
   const isOpen = market.state === "open";
@@ -67,14 +105,12 @@ export default function MarketCard({ market }: Props) {
     dotColor = "bg-yellow-400";
   }
 
-  const countdown = formatCountdown(market.end_time);
-
   return (
     <Link
       href={`/market/${market.id}`}
-      className="group rounded-lg border border-neutral-200/80 dark:border-neutral-800/80 bg-white dark:bg-neutral-900 p-4 hover:shadow-md hover:border-accentPurple/40 transition-colors relative"
+      className="group rounded-lg border border-neutral-800/80 bg-neutral-900 p-4 hover:shadow-md hover:border-accentPurple/40 transition-colors relative"
     >
-      {/* Status Pill */}
+      {/* Status */}
       <div className="absolute top-3 right-3 flex items-center gap-1">
         <span
           className={`inline-block w-2 h-2 rounded-full animate-pulse ${dotColor}`}
@@ -84,34 +120,60 @@ export default function MarketCard({ market }: Props) {
         </span>
       </div>
 
+      {/* Volume */}
       <div className="mb-3 text-sm text-neutral-500">
         {formatUsdShort(volume)} Vol.
       </div>
 
-      {market.symbol && market.symbol !== "N/A" && (
+      {/* Symbol */}
+      {market.symbol && (
         <div className="mb-2 inline-flex items-center rounded-full bg-accentPurple/15 text-accentPurple px-2.5 py-0.5 text-xs font-medium">
           {market.symbol}
         </div>
       )}
 
-      <h3 className="mb-1 text-base font-semibold leading-snug group-hover:text-accentPurple">
+      {/* Title */}
+      <h3 className="mb-1 text-base font-semibold group-hover:text-accentPurple">
         {market.name}
       </h3>
-      <p className="text-xs text-neutral-500 mb-3">{countdown}</p>
 
-      <div className="grid grid-cols-2 gap-2">
-        {outcomes.map((o) => (
-          <div
-            key={o.label}
-            className="flex items-center justify-between rounded-md border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-sm bg-neutral-50 dark:bg-neutral-950 group-hover:bg-white group-hover:dark:bg-neutral-900"
-          >
-            <span className="text-neutral-700 dark:text-neutral-300">
-              {o.label}
-            </span>
-            <span className="font-medium">{o.percent}%</span>
-          </div>
-        ))}
-      </div>
+      {/* Countdown */}
+      <p className="text-xs text-neutral-500 mb-3">
+        {formatCountdown(market.end_time)}
+      </p>
+
+      {/* YES / NO */}
+<div className="grid grid-cols-2 gap-2">
+
+  {/* YES */}
+  <div
+    className="
+      flex items-center justify-between rounded-md border px-3 py-2 text-sm 
+      border border-neutral-700
+      bg-neutral-950
+      hover:bg-green-900/20
+      transition-colors
+    "
+  >
+    <span className="white-300">Yes</span>
+    <span className="font-medium white-300">{yesPercent}%</span>
+  </div>
+
+  {/* NO */}
+  <div
+    className="
+    border border-neutral-700
+      flex items-center justify-between rounded-md border px-3 py-2 text-sm 
+      bg-neutral-950
+      hover:bg-red-900/20
+      transition-colors
+    "
+  >
+    <span className="white-300">No</span>
+    <span className="font-medium white-300">{noPercent}%</span>
+  </div>
+
+</div>
     </Link>
   );
 }

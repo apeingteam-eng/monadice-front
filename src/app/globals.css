@@ -1,5 +1,83 @@
+/* ----------------------------------------------------------- */
+/* 1) Tailwind MUST be first                                   */
+/* ----------------------------------------------------------- */
 @import "tailwindcss";
 
+/* ----------------------------------------------------------- */
+/* 2) Default react-datepicker CSS (import from node_modules)  */
+/*    — This line MUST exist in globals.css                    */
+/* ----------------------------------------------------------- */
+@import "react-datepicker/dist/react-datepicker.css";
+
+/* ----------------------------------------------------------- */
+/* 3) Your custom react-datepicker Dark Theme overrides        */
+/* ----------------------------------------------------------- */
+.react-datepicker {
+  background-color: #111 !important;
+  border: 1px solid #333 !important;
+  color: #fff !important;
+  font-family: var(--font-sans);
+}
+
+.react-datepicker__header {
+  background-color: #1a1a1a !important;
+  border-bottom: 1px solid #333 !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker-year-header {
+  color: #fff !important;
+}
+
+.react-datepicker__day-name,
+.react-datepicker__day,
+.react-datepicker__time-name {
+  color: #ccc !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: rgba(155, 93, 229, 0.2) !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__time-list-item--selected {
+  background-color: #9b5de5 !important;
+  color: #fff !important;
+}
+
+.react-datepicker__triangle {
+  display: none !important;
+}
+
+.react-datepicker__time-container {
+  border-left: 1px solid #333 !important;
+}
+
+.react-datepicker__time-list {
+  background-color: #111 !important;
+  color: #ccc !important;
+}
+
+.react-datepicker__input-container input {
+  background: transparent !important;
+  color: #fff !important;
+  border: 1px solid #333 !important;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.react-datepicker__input-container input:focus {
+  border-color: #9b5de5 !important;
+  box-shadow: 0 0 0 2px rgba(155, 93, 229, 0.4);
+}
+
+/* ----------------------------------------------------------- */
+/* 4) Your Theme + CSS variables                                */
+/* ----------------------------------------------------------- */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -10,7 +88,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  /* Tailwind v4 custom color */
   --color-accentPurple: #9b5de5;
 }
 
@@ -21,4 +98,21 @@
   }
 }
 
-/* Let Tailwind utilities control body bg/text set in layout.tsx */
+/* ----------------------------------------------------------- */
+/* 5) Let Tailwind utilities in layout.tsx handle body color   */
+/* ----------------------------------------------------------- */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.25s ease-out;
+}
+/* nothing else needed */

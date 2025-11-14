@@ -5,22 +5,19 @@ import { useAccount, useWalletClient, useChainId } from "wagmi";
 import { BrowserProvider, Contract, parseUnits } from "ethers";
 import type { Eip1193Provider } from "ethers";
 
+import { ERC20ABI, BetCampaignABI } from "@/lib/ethers/abi";
+import { useToast } from "@/components/toast/ToastContext";
+
 const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const USDC_DECIMALS = 6;
 const TARGET_CHAIN_ID = 84532; // Base Sepolia
 
-const erc20Abi = [
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-];
-
-const campaignAbi = ["function join(uint8 side, uint256 amount) external"];
-
 type Props = {
   campaignAddress: string;
+  bettingClosed: boolean;
 };
+export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) {  const toast = useToast();
 
-export default function PlaceBetForm({ campaignAddress }: Props) {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
@@ -28,13 +25,22 @@ export default function PlaceBetForm({ campaignAddress }: Props) {
   const [outcome, setOutcome] = useState<"Yes" | "No">("Yes");
   const [amount, setAmount] = useState("");
   const [potentialPayout, setPotentialPayout] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [fetchingPayout, setFetchingPayout] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // 🧮 Fetch potential payout dynamically
+  /* -------------------------------------------------------------------------- */
+  /*                 🔮 Fetch dynamic payout preview from backend               */
+  /* -------------------------------------------------------------------------- */
+   if (bettingClosed) {
+    return (
+      <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 text-center">
+        <h3 className="text-base font-semibold mb-2">Place Bet</h3>
+        <p className="text-neutral-400 text-sm">
+          This market is closed for betting.
+        </p>
+      </div>
+    );
+  }
   useEffect(() => {
     if (!amount || Number(amount) <= 0) {
       setPotentialPayout(null);
@@ -42,126 +48,161 @@ export default function PlaceBetForm({ campaignAddress }: Props) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(async () => {
+    const debounce = setTimeout(async () => {
       try {
         setFetchingPayout(true);
+
         const side = outcome === "Yes";
         const url = `${process.env.NEXT_PUBLIC_API_URL}/bet/potential-payout?campaign_address=${campaignAddress}&side=${side}&amount=${amount}`;
+
         const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error("Failed to fetch payout");
+        if (!res.ok) throw new Error("Payout fetch failed");
+
         const data = await res.json();
         setPotentialPayout(data);
-      } catch (err) {
-        console.error("Payout fetch failed:", err);
+      } catch {
         setPotentialPayout(null);
       } finally {
         setFetchingPayout(false);
       }
-    }, 500);
+    }, 400);
 
     return () => {
-      clearTimeout(timeout);
+      clearTimeout(debounce);
       controller.abort();
     };
   }, [amount, outcome, campaignAddress]);
 
-  // 🪙 Place Bet handler
+  /* -------------------------------------------------------------------------- */
+  /*                                🪙 Place Bet                                 */
+  /* -------------------------------------------------------------------------- */
+  
   const handlePlaceBet = async () => {
-    setError(null);
-    setStatus(null);
-    setTxHash(null);
-
     if (!isConnected || !walletClient || !address) {
-      setError("Wallet not connected.");
+      toast.error("Wallet not connected.");
       return;
     }
 
     if (chainId !== TARGET_CHAIN_ID) {
-      setError("Wrong network. Please switch to Base Sepolia.");
+      toast.error("Please switch to Base Sepolia.");
       return;
     }
 
     if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid bet amount.");
+      toast.error("Enter a valid USDC bet amount.");
       return;
     }
 
     try {
       setLoading(true);
 
-      // ✅ Type-safe BrowserProvider creation
+      // Provider + Signer
       const provider = new BrowserProvider(
         walletClient.transport as unknown as Eip1193Provider
       );
       const signer = await provider.getSigner(address);
 
-      const usdc = new Contract(USDC_ADDRESS, erc20Abi, signer);
-      const campaign = new Contract(campaignAddress, campaignAbi, signer);
+      const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
+      const campaign = new Contract(campaignAddress, BetCampaignABI, signer);
 
       const parsedAmount = parseUnits(amount, USDC_DECIMALS);
-      const allowance = await usdc.allowance(address, campaignAddress);
 
+      /* ------------------------------ Check Allowance ------------------------------ */
+      toast.info("Checking allowance…");
+
+      const allowance = await usdc.allowance(address, campaignAddress);
       if (allowance < parsedAmount) {
-        setStatus("Approving USDC for campaign…");
+        toast.info("Approving USDC…");
+
         const approveTx = await usdc.approve(campaignAddress, parsedAmount);
         await approveTx.wait();
-        setStatus("✅ Approval confirmed.");
+
+        toast.success("USDC approved!");
       }
 
+      /* ------------------------------- Place Bet ---------------------------------- */
       const side = outcome === "Yes" ? 1 : 0;
 
-      setStatus("Placing bet on-chain…");
+      toast.info("Placing bet on-chain…");
+
       const tx = await campaign.join(side, parsedAmount);
       const receipt = await tx.wait();
 
-      setTxHash(receipt.hash);
-      setStatus("✅ Bet placed successfully!");
+      toast.success("Bet placed successfully!");
 
-      // 🔄 Sync backend bets
+      /* ------------------------------ Backend Sync --------------------------------- */
       try {
-        setStatus("🔄 Syncing bets with backend...");
-        const syncRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/bet/sync-bets?campaign_address=${campaignAddress}`,
-          {
-            method: "GET",
-            headers: { "Content-Type": "application/json" },
-          }
+        toast.info("Syncing bet with backend…");
+
+        const sync = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/bet/sync-bets?campaign_address=${campaignAddress}`
         );
-        if (!syncRes.ok) throw new Error("Failed to sync bets");
-        setStatus("✅ Bets synced successfully!");
-      } catch (syncErr: unknown) {
-        console.error("Sync error:", syncErr);
-        setStatus("⚠️ Bet confirmed, but sync failed. Please refresh manually.");
+
+        if (!sync.ok) throw new Error("Sync failed");
+        toast.success("Bet synced with backend!");
+      } catch {
+        toast.error("Bet placed, but backend sync failed. Refresh manually.");
       }
-    } catch (err: unknown) {
-      console.error("Bet error:", err);
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Transaction failed.");
-      }
-    } finally {
+    } catch (err: any) {
+  console.error("Bet error:", err);
+
+  // 🛑 Direct MetaMask cancel
+  if (err?.code === 4001) {
+    toast.error("Transaction cancelled.");
+    return;
+  }
+
+  // 🛑 Ethers structured cancel error
+  if (err?.info?.error?.code === 4001) {
+    toast.error("Transaction cancelled.");
+    return;
+  }
+if (
+    err?.reason === "ERC20: transfer amount exceeds balance" ||
+    err?.info?.error?.message?.includes("transfer amount exceeds balance") ||
+    err?.message?.includes("transfer amount exceeds balance")
+  ) {
+    toast.error("You don't have enough USDC to place this bet.");
+    return;
+  }
+  // 🛑 Approval-specific cancel
+  if (err?.message?.toLowerCase().includes("approve")) {
+    toast.error("Approval cancelled.");
+    return;
+  }
+
+  // 🛑 Generic cancel message
+  if (err?.message?.toLowerCase().includes("denied")) {
+    toast.error("You cancelled the transaction.");
+    return;
+  }
+
+  // Default error fallback
+  toast.error(err?.message || "Transaction failed.");
+} finally {
       setLoading(false);
     }
   };
 
-  const getExplorerUrl = (hash: string) =>
-    `https://sepolia.basescan.org/tx/${hash}`;
-
+  /* -------------------------------------------------------------------------- */
+  /*                                   UI                                       */
+  /* -------------------------------------------------------------------------- */
   return (
     <div className="rounded-lg border border-neutral-800 p-4 bg-neutral-900 space-y-3">
       <h3 className="text-base font-semibold">Place Bet</h3>
 
+      {/* Outcome Selector */}
       <label className="text-sm">Outcome</label>
       <select
         value={outcome}
-        onChange={(e) => setOutcome(e.target.value as "Yes" | "No")}
-        className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50"
+        onChange={(e) => setOutcome(e.target.value as any)}
+        className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm"
       >
         <option value="Yes">Yes</option>
         <option value="No">No</option>
       </select>
 
+      {/* Amount */}
       <label className="text-sm">Amount (USDC)</label>
       <input
         value={amount}
@@ -170,12 +211,12 @@ export default function PlaceBetForm({ campaignAddress }: Props) {
         min="0"
         step="0.01"
         placeholder="0.00"
-        className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accentPurple/50"
+        className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm"
       />
 
-      {/* 💰 Show potential payout */}
+      {/* Payout */}
       {fetchingPayout ? (
-        <p className="text-xs text-neutral-500">Calculating potential payout…</p>
+        <p className="text-xs text-neutral-500">Calculating payout…</p>
       ) : potentialPayout ? (
         <div className="text-sm text-neutral-300">
           <span className="font-medium text-accentPurple">Potential Payout:</span>{" "}
@@ -186,30 +227,18 @@ export default function PlaceBetForm({ campaignAddress }: Props) {
         </div>
       ) : null}
 
+      {/* Place Bet Button */}
       <button
         onClick={handlePlaceBet}
         disabled={loading}
-        className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full rounded-md bg-accentPurple hover:bg-accentPurple/90 text-white px-4 py-2 text-sm font-medium disabled:opacity-50"
       >
         {loading ? "Processing…" : "Place Bet"}
       </button>
 
-      {status && <p className="text-sm text-neutral-300">{status}</p>}
-      {txHash && (
-        <a
-          href={getExplorerUrl(txHash)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-sm text-accentPurple underline"
-        >
-          🔗 View Transaction
-        </a>
-      )}
-      {error && <p className="text-sm text-red-500">{error}</p>}
-
       <p className="text-xs text-neutral-500">
-        Market address:{" "}
-        <span className="font-mono text-neutral-400">
+        Market:{" "}
+        <span className="font-mono">
           {campaignAddress.slice(0, 6)}…{campaignAddress.slice(-4)}
         </span>
       </p>

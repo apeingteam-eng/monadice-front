@@ -1,10 +1,45 @@
+// src/config/network.ts
+
 export const NETWORKS = {
-  mainnet: { chainId: 1, name: "mainnet" },
-  sepolia: { chainId: 11155111, name: "sepolia" },
-};
+  baseSepolia: {
+    chainId: 84532,
+    name: "base-sepolia",
+    rpcUrl: "https://sepolia.base.org",
+    usdcDecimals: 6,
+    addresses: {
+      FACTORY: "0xED7cd209EcA8060e61Bdc2B3a3Ec895b42c6a2B6",
+      USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    },
+  },
+
+  // ---- Example of adding more chains later ----
+  mocaTestnet: {
+    chainId: 20240215,
+    name: "moca-testnet",
+    rpcUrl: "https://testnet.mocachain.xyz",
+    usdcDecimals: 6,
+    addresses: {
+      FACTORY: "",
+      USDC: "",
+    },
+  },
+
+  monadMainnet: {
+    chainId: 99999,
+    name: "monad-mainnet",
+    rpcUrl: "https://rpc.monad.xyz",
+    usdcDecimals: 6,
+    addresses: {
+      FACTORY: "",
+      USDC: "",
+    },
+  },
+} as const;
 
 export type SupportedNetwork = keyof typeof NETWORKS;
 
+// Pick the active network here:
+export const ACTIVE_NETWORK: SupportedNetwork = "baseSepolia";
 
-
-
+// Export active chain config everywhere:
+export const CHAIN = NETWORKS[ACTIVE_NETWORK];
