@@ -44,44 +44,33 @@ export default function MarketCard({ market }: Props) {
   const [volume, setVolume] = useState(0);
 
   useEffect(() => {
-    async function loadOnchainData() {
-      try {
-        // 🔥 Use the RPC from network.ts (Base Sepolia currently)
-        const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+  async function loadOnchainData() {
+  try {
+    const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+    const contract = new Contract(market.campaign_address, BetCampaignABI, provider);
 
-        const contract = new Contract(
-          market.campaign_address,
-          BetCampaignABI,
-          provider
-        );
+    const divisor = 1e6; // USDC decimals
 
-        const [tTrueRaw, tFalseRaw, tPotRaw] = await Promise.all([
-          contract.totalTrue(),
-          contract.totalFalse(),
-          contract.totalInitialPot(),
-        ]);
+    const tTrueRaw  = await contract.totalTrue().catch(() => 0n);
+    const tFalseRaw = await contract.totalFalse().catch(() => 0n);
+    const tPotRaw   = await contract.totalInitialPot().catch(() => 0n);
 
-        // Convert USDC (6 decimals) → human number
-        const trueNum = Number(tTrueRaw) / 1e6;
-        const falseNum = Number(tFalseRaw) / 1e6;
-        const potNum = Number(tPotRaw) / 1e6;
+    const trueNum  = Number(tTrueRaw)  / divisor;
+    const falseNum = Number(tFalseRaw) / divisor;
+    const potNum   = Number(tPotRaw)   / divisor;
 
-        const totalVotes = trueNum + falseNum;
+    const totalVotes = trueNum + falseNum;
+    const yesPct = totalVotes > 0 ? Math.round((trueNum / totalVotes) * 100) : 50;
+    const noPct  = totalVotes > 0 ? Math.round((falseNum / totalVotes) * 100) : 50;
 
-        if (totalVotes > 0) {
-          setYesPercent(Math.round((trueNum / totalVotes) * 100));
-          setNoPercent(Math.round((falseNum / totalVotes) * 100));
-        } else {
-          setYesPercent(50);
-          setNoPercent(50);
-        }
+    setYesPercent(yesPct);
+    setNoPercent(noPct);
+    setVolume(trueNum + falseNum + potNum);
 
-        // Total market volume
-        setVolume(trueNum + falseNum + potNum);
-      } catch (err) {
-        console.error("Failed to load on-chain data:", err);
-      }
-    }
+  } catch (err) {
+    console.log("Skipping undeployed or corrupted pool:", err);
+  }
+}
 
     loadOnchainData();
   }, [market.campaign_address]);

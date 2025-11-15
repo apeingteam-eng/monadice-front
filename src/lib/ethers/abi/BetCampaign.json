@@ -14,8 +14,6 @@
     "type": "constructor"
   },
 
-
-
   {
     "anonymous": false,
     "inputs": [
@@ -27,6 +25,7 @@
     "name": "Joined",
     "type": "event"
   },
+
   {
     "anonymous": false,
     "inputs": [
@@ -35,6 +34,7 @@
     "name": "InitialPotSeeded",
     "type": "event"
   },
+
   {
     "anonymous": false,
     "inputs": [
@@ -45,12 +45,14 @@
     "name": "Resolved",
     "type": "event"
   },
+
   {
     "anonymous": false,
     "inputs": [],
     "name": "Canceled",
     "type": "event"
   },
+
   {
     "anonymous": false,
     "inputs": [
@@ -61,6 +63,7 @@
     "name": "Claimed",
     "type": "event"
   },
+
   {
     "anonymous": false,
     "inputs": [
@@ -72,77 +75,95 @@
     "type": "event"
   },
 
-
-
   {
     "inputs": [],
     "name": "name",
-    "outputs": [
-      { "internalType": "string", "name": "", "type": "string" }
-    ],
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "symbol",
-    "outputs": [
-      { "internalType": "string", "name": "", "type": "string" }
-    ],
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "totalTrue",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "totalFalse",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "totalInitialPot",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "feeBps",
-    "outputs": [
-      { "internalType": "uint16", "name": "", "type": "uint16" }
-    ],
+    "outputs": [{ "internalType": "uint16", "name": "", "type": "uint16" }],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
     "name": "endTime",
+    "outputs": [{ "internalType": "uint64", "name": "", "type": "uint64" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [],
+    "name": "state",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [],
+    "name": "nextTicketId",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "tickets",
     "outputs": [
-      { "internalType": "uint64", "name": "", "type": "uint64" }
+      { "internalType": "uint256", "name": "id", "type": "uint256" },
+      { "internalType": "uint8", "name": "side", "type": "uint8" },
+      { "internalType": "uint256", "name": "stake", "type": "uint256" },
+      { "internalType": "bool", "name": "claimed", "type": "bool" }
     ],
     "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [],
-    "name": "state",
-    "outputs": [
-      { "internalType": "uint8", "name": "", "type": "uint8" }
-    ],
+    "name": "outcomeTrue",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -150,9 +171,7 @@
   {
     "inputs": [],
     "name": "oracle",
-    "outputs": [
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -160,9 +179,7 @@
   {
     "inputs": [],
     "name": "creator",
-    "outputs": [
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -170,13 +187,54 @@
   {
     "inputs": [],
     "name": "treasury",
-    "outputs": [
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
 
+
+  {
+    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+    "name": "ownerOf",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [{ "internalType": "address", "name": "owner", "type": "address" }],
+    "name": "balanceOf",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
+    "name": "getApproved",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" },
+      { "internalType": "address", "name": "operator", "type": "address" }
+    ],
+    "name": "isApprovedForAll",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [{ "internalType": "bytes4", "name": "interfaceId", "type": "bytes4" }],
+    "name": "supportsInterface",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
 
 
   {
@@ -191,9 +249,7 @@
   },
 
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "ticketId", "type": "uint256" }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "ticketId", "type": "uint256" }],
     "name": "claim",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -201,9 +257,7 @@
   },
 
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "ticketId", "type": "uint256" }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "ticketId", "type": "uint256" }],
     "name": "refund",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -211,9 +265,7 @@
   },
 
   {
-    "inputs": [
-      { "internalType": "bool", "name": "_outcomeTrue", "type": "bool" }
-    ],
+    "inputs": [{ "internalType": "bool", "name": "_outcomeTrue", "type": "bool" }],
     "name": "resolve",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -240,21 +292,15 @@
   },
 
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "ticketId", "type": "uint256" }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "ticketId", "type": "uint256" }],
     "name": "tokenURI",
-    "outputs": [
-      { "internalType": "string", "name": "", "type": "string" }
-    ],
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
 
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
+    "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
     "name": "seedInitialPot",
     "outputs": [],
     "stateMutability": "nonpayable",

@@ -7,9 +7,6 @@ import type { Eip1193Provider } from "ethers";
 
 import { BetMarketFactoryABI, ERC20ABI } from "@/lib/ethers/abi";
 
-/* -------------------------------------------------------------------------- */
-/*                                  CONFIG                                    */
-/* -------------------------------------------------------------------------- */
 const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const FACTORY_ADDRESS = "0xED7cd209EcA8060e61Bdc2B3a3Ec895b42c6a2B6";
 
@@ -25,31 +22,35 @@ export default function CreateMarketTwoStep() {
   const [signer, setSigner] = useState<JsonRpcSigner | null>(null);
   const [allowanceEnough, setAllowanceEnough] = useState(false);
 
+  // Inputs
   const [name, setName] = useState("");
   const [category, setCategory] = useState("CRYPTO");
   const [endTime, setEndTime] = useState("");
+
+  // Verification state
+  const [verifiedDraft, setVerifiedDraft] = useState<boolean | null>(null);
 
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
 
-  /* ---------------------------- Init signer -------------------------------- */
+  /* ----------------------------- SIGNER SETUP ----------------------------- */
   useEffect(() => {
     async function setup() {
-      if (!walletClient || !address) {
-        setSigner(null);
-        return;
-      }
+      if (!walletClient || !address) return setSigner(null);
 
-      const provider = new BrowserProvider(walletClient.transport as Eip1193Provider);
+      const provider = new BrowserProvider(
+        walletClient.transport as Eip1193Provider
+      );
+
       const s = await provider.getSigner(address);
       setSigner(s);
     }
     setup();
   }, [walletClient, address]);
 
-  /* ------------------------- Check allowance ------------------------------- */
+  /* -------------------------- CHECK USDC ALLOWANCE ------------------------ */
   useEffect(() => {
     async function checkAllowance() {
       if (!signer || !address) return;
@@ -63,7 +64,73 @@ export default function CreateMarketTwoStep() {
     checkAllowance();
   }, [signer, address]);
 
-  /* ---------------------------- Approve Logic ------------------------------ */
+  /* --------------------------- VERIFY CAMPAIGN ---------------------------- */
+  const handleVerifyDraft = async () => {
+    setError(null);
+    setStatus(null);
+    setVerifiedDraft(null);
+
+    // ✅ Do validation *before* setting loading
+    if (!name.trim()) {
+      setError("Market name required.");
+      return;
+    }
+    if (!endTime) {
+      setError("End time required.");
+      return;
+    }
+    if (!category) {
+      setError("Category required.");
+      return;
+    }
+    if (!address) {
+      setError("Wallet required.");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Verifying campaign…");
+
+    try {
+      const body = {
+        title: name,
+        end_time: new Date(endTime).toISOString(),
+        user_wallet: address,
+        category: category.toLowerCase(),
+      };
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/verify-campaign/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatus(null);
+        setError(data.message || "Verification failed.");
+        return;
+      }
+
+      setVerifiedDraft(data.verified);
+
+      if (data.verified) {
+        setStatus("Draft verified ✔ You may deploy your market.");
+      } else {
+        setError(data.message || "Statement not measurable.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Verification error.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ---------------------------- APPROVE LOGIC ----------------------------- */
   const handleApprove = async () => {
     if (!signer) {
       setError("Wallet not ready.");
@@ -90,17 +157,20 @@ export default function CreateMarketTwoStep() {
     }
   };
 
-  /* ---------------------------- Create Campaign ---------------------------- */
+  /* --------------------------- CREATE CAMPAIGN ---------------------------- */
   const handleCreateMarket = async () => {
     setError(null);
     setStatus(null);
     setTxHash(null);
 
+    if (!verifiedDraft) {
+      return setError("You must verify the campaign first.");
+    }
+
     if (!signer) return setError("Wallet not ready.");
     if (!isConnected) return setError("Wallet not connected.");
-    if (chainId !== TARGET_CHAIN_ID) return setError("Wrong network.");
-    if (!name.trim()) return setError("Market name required.");
-    if (!endTime) return setError("End time required.");
+    if (chainId !== TARGET_CHAIN_ID)
+      return setError("Wrong network. Switch to Base Sepolia.");
 
     setLoading(true);
 
@@ -113,34 +183,31 @@ export default function CreateMarketTwoStep() {
 
       setStatus("Waiting for confirmation…");
       const receipt = await tx.wait();
-
       setTxHash(receipt.hash);
-      setStatus("Market created on-chain!");
 
-      // SYNC BACKEND
+      setStatus("Market created!");
+
+      // BACKEND SYNC
       setStatus("Syncing backend…");
-
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
       if (!res.ok) {
         setStatus("Market created but backend sync failed.");
-        return;
+      } else {
+        setStatus("Backend synced successfully!");
       }
-
-      setStatus("Backend synced successfully! 🎉");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Create failed.";
-      setError(msg);
+    } catch (err: any) {
+      setError(err.message || "Create failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ------------------------------ UI -------------------------------------- */
+  /* ------------------------------- UI ------------------------------------ */
   return (
     <form className="space-y-5 p-6 bg-neutral-900 border border-neutral-800 rounded-xl">
       <h2 className="text-white text-lg font-semibold">Create Market</h2>
 
-      {/* Title */}
+      {/* Name */}
       <div>
         <label className="text-neutral-400 text-sm">Market Name</label>
         <input
@@ -164,7 +231,7 @@ export default function CreateMarketTwoStep() {
         </select>
       </div>
 
-      {/* End Time */}
+      {/* End time */}
       <div>
         <label className="text-neutral-400 text-sm">End Time</label>
         <input
@@ -175,8 +242,18 @@ export default function CreateMarketTwoStep() {
         />
       </div>
 
-      {/* Buttons */}
-      {!allowanceEnough ? (
+      {/* Verify button */}
+      <button
+        type="button"
+        onClick={handleVerifyDraft}
+        disabled={loading}
+        className="w-full bg-blue-600 py-2 rounded-md text-white disabled:opacity-50"
+      >
+        {loading ? "Verifying…" : "Verify Market"}
+      </button>
+
+      {/* Approval & Create buttons */}
+      {verifiedDraft && !allowanceEnough && (
         <button
           type="button"
           onClick={handleApprove}
@@ -185,7 +262,9 @@ export default function CreateMarketTwoStep() {
         >
           {loading ? "Approving…" : "Approve 1 USDC"}
         </button>
-      ) : (
+      )}
+
+      {verifiedDraft && allowanceEnough && (
         <button
           type="button"
           onClick={handleCreateMarket}
@@ -198,13 +277,14 @@ export default function CreateMarketTwoStep() {
 
       {status && <p className="text-neutral-300">{status}</p>}
       {error && <p className="text-red-500">{error}</p>}
+
       {txHash && (
         <a
-          href={`https://sepolia.basescan.org/tx/${txHash}`}
-          target="_blank"
           className="underline text-accentPurple"
+          target="_blank"
+          href={`https://sepolia.basescan.org/tx/${txHash}`}
         >
-          View Transaction
+          View Transaction →
         </a>
       )}
     </form>

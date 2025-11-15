@@ -8,7 +8,7 @@ import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
 import { CHAIN } from "@/config/network";
 import PlaceBetForm from "@/components/PlaceBetForm";
 import { useToast } from "@/components/toast/ToastContext";
-
+import ClaimView from "@/components/market/ClaimView";
 /* -------------------------------------------------------------------------- */
 /*                              Types / Helpers                               */
 /* -------------------------------------------------------------------------- */
@@ -172,7 +172,10 @@ export default function MarketPage() {
   const now = Math.floor(Date.now() / 1000);
   const isEnded = campaign.end_time <= now;
   const isOpen = campaign.state === "open";
-const bettingClosed = !isOpen || isEnded;
+  const isPending = isOpen && isEnded;
+const isRunning = isOpen && !isEnded;
+const isFinished = !isOpen; // resolved or cancelled
+const bettingClosed = isPending || isFinished;
   let statusLabel = "Ended";
   let pillColor = "bg-red-500/15 text-red-400";
   let dotColor = "bg-red-400";
@@ -272,10 +275,21 @@ const bettingClosed = !isOpen || isEnded;
           </div>
         </div>
 
-        {/* RIGHT PANEL — Bet Form */}
-        <div className="md:col-span-1">
-          <PlaceBetForm campaignAddress={campaign.campaign_address} bettingClosed={bettingClosed} />
-        </div>
+        {/* RIGHT PANEL — Bet or Claim */}
+<div className="md:col-span-1">
+ {isRunning ? (
+  <PlaceBetForm
+    campaignAddress={campaign.campaign_address}
+    bettingClosed={false}
+  />
+) : (
+ <ClaimView
+  campaignAddress={campaign.campaign_address as `0x${string}`}
+  endTime={campaign.end_time}
+  backendState={campaign.state}   // "open" | "closed"
+/>
+)}
+</div>
       </div>
     </div>
   );
