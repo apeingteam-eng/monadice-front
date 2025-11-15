@@ -12,6 +12,8 @@ import BetMarketFactoryABI from "@/lib/ethers/abi/BetMarketFactory.json";
 import { CHAIN } from "@/config/network";
 import { useToast } from "@/components/toast/ToastContext";
 
+import type { Signer } from "ethers";
+
 const USDC_ADDRESS = CHAIN.addresses.USDC;
 const FACTORY_ADDRESS = CHAIN.addresses.FACTORY;
 const USDC_DECIMALS = 6;
@@ -20,7 +22,7 @@ const TARGET_CHAIN_ID = CHAIN.chainId;
 
 export default function CreateMarketPage() {
   const toast = useToast();
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
 
@@ -28,7 +30,7 @@ export default function CreateMarketPage() {
   const [category, setCategory] = useState("CRYPTO");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const [signer, setSigner] = useState<any | null>(null);
+  const [signer, setSigner] = useState<Signer | null>(null);
   const [allowanceEnough, setAllowanceEnough] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,7 +98,7 @@ export default function CreateMarketPage() {
 
       toast.success("Draft verified! ✔");
       setVerified(true);
-    } catch (err) {
+    } catch {
       toast.error("Verification failed.");
     } finally {
       setLoading(false);
@@ -122,7 +124,7 @@ export default function CreateMarketPage() {
 
       toast.success("USDC approved!");
       setAllowanceEnough(true);
-    } catch (err) {
+    } catch {
       toast.error("Approval failed.");
     } finally {
       setLoading(false);
@@ -152,7 +154,7 @@ export default function CreateMarketPage() {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
 
       toast.success("Backend synced!");
-    } catch (err) {
+    } catch {
       toast.error("Create failed.");
     } finally {
       setLoading(false);

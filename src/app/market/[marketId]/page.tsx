@@ -286,7 +286,6 @@ const bettingClosed = isPending || isFinished;
  <ClaimView
   campaignAddress={campaign.campaign_address as `0x${string}`}
   endTime={campaign.end_time}
-  backendState={campaign.state}   // "open" | "closed"
 />
 )}
 </div>

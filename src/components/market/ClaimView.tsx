@@ -18,14 +18,12 @@ type Ticket = {
 type ClaimViewProps = {
   campaignAddress: `0x${string}`;
   endTime: number;        // unix seconds
-  backendState: string;   // expected "open" or "closed"
 };
 
 /* --------------------------- Main Component --------------------------- */
 export default function ClaimView({
   campaignAddress,
   endTime,
-  backendState,
 }: ClaimViewProps) {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -113,8 +111,7 @@ export default function ClaimView({
             stake: Number(t.stake) / 1e6,
             claimed: t.claimed,
           });
-          const feDidWin = outcome ? Number(t.side) === 1 : Number(t.side) === 0;
-          console.log(`Ticket ${Number(t.id)} FE says win=${feDidWin} side=${Number(t.side)}`);
+          console.log(`Ticket ${Number(t.id)} FE says win= side=${Number(t.side)}`);
         } catch {
           // ignore tickets that revert (burned / non-existent)
         }
@@ -175,9 +172,9 @@ export default function ClaimView({
 
       toast.success("All claims completed!");
       loadAll();
-    } catch (err: any) {
-      console.error("❌ Claim error:", err);
-      toast.error(err?.message || "Claim failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Claim failed";
+      toast.error(message);
     }
   }
 

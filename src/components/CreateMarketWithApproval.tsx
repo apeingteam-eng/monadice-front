@@ -15,7 +15,7 @@ const REQUIRED_USDC = 1n * 10n ** BigInt(USDC_DECIMALS);
 const TARGET_CHAIN_ID = 84532;
 
 export default function CreateMarketTwoStep() {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
 
@@ -123,8 +123,9 @@ export default function CreateMarketTwoStep() {
       } else {
         setError(data.message || "Statement not measurable.");
       }
-    } catch (err: any) {
-      setError(err.message || "Verification error.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Verification error.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -149,9 +150,8 @@ export default function CreateMarketTwoStep() {
 
       setStatus("USDC approved!");
       setAllowanceEnough(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Approve failed.";
-      setError(msg);
+    } catch {
+      setError("Approve failed.");
     } finally {
       setLoading(false);
     }
@@ -168,7 +168,7 @@ export default function CreateMarketTwoStep() {
     }
 
     if (!signer) return setError("Wallet not ready.");
-    if (!isConnected) return setError("Wallet not connected.");
+    if (!address) return setError("Wallet not connected.");
     if (chainId !== TARGET_CHAIN_ID)
       return setError("Wrong network. Switch to Base Sepolia.");
 
@@ -195,8 +195,8 @@ export default function CreateMarketTwoStep() {
       } else {
         setStatus("Backend synced successfully!");
       }
-    } catch (err: any) {
-      setError(err.message || "Create failed.");
+    } catch {
+      setError("Create failed.");
     } finally {
       setLoading(false);
     }
