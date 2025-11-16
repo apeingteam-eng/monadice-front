@@ -6,6 +6,13 @@ import { Contract, JsonRpcProvider } from "ethers";
 import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
 import { CHAIN } from "@/config/network";
 
+type OnchainStats = {
+  yesPercent: number;
+  noPercent: number;
+  volume: number;
+  fees: number;
+};
+
 export interface CreatedCampaign {
   id: number;
   name: string;
@@ -61,7 +68,8 @@ export default function CreatedBetsList({ campaigns }: Props) {
   useEffect(() => {
     async function load() {
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-      const results: Record<string, any> = {};
+      
+      const results: Record<string, OnchainStats> = {};
 
       for (const c of campaigns) {
         try {
@@ -127,7 +135,7 @@ export default function CreatedBetsList({ campaigns }: Props) {
             {["All", "Running", "Pending", "Ended", "Cancelled"].map((f) => (
               <button
                 key={f}
-                onClick={() => setActiveFilter(f as any)}
+                onClick={() => setActiveFilter(f as "All" | "Running" | "Pending" | "Ended" | "Cancelled")}
                 className={`
                   px-3 py-1 text-xs rounded-full border transition
                   ${
@@ -148,7 +156,7 @@ export default function CreatedBetsList({ campaigns }: Props) {
             {["All", "SPORTS", "CRYPTO", "POLITICS", "SOCIAL"].map((cat) => (
               <button
                 key={cat}
-                onClick={() => setCategoryFilter(cat as any)}
+                onClick={() => setCategoryFilter(cat as "All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL")}
                 className={`
                   px-3 py-1 text-xs rounded-full border transition
                   ${
@@ -171,7 +179,7 @@ export default function CreatedBetsList({ campaigns }: Props) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((c) => {
-            const stats = onchain[c.campaign_address];
+            const stats: OnchainStats | undefined = onchain[c.campaign_address];
 
             return (
               <div

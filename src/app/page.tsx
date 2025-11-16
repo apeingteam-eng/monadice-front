@@ -85,7 +85,7 @@ export default function Home() {
               {["All", "Running", "Pending", "Ended"].map((f) => (
                 <button
                   key={f}
-                  onClick={() => setActiveFilter(f as any)}
+                  onClick={() => setActiveFilter(f as "All" | "Running" | "Pending" | "Ended")}
                   className={`
                     px-3 py-1 text-xs rounded-full border transition
                     ${
@@ -108,7 +108,7 @@ export default function Home() {
               {["All", "SPORTS", "CRYPTO", "POLITICS", "SOCIAL"].map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setCategoryFilter(cat as any)}
+                  onClick={() => setCategoryFilter(cat as "All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL")}
                   className={`
                     px-3 py-1 text-xs rounded-full border transition
                     ${
