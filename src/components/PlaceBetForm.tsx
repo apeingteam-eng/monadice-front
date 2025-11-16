@@ -121,8 +121,22 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
       const allowance: bigint = await usdc.allowance(address, campaignAddress);
       if (allowance < parsedAmount) {
-        const tx = await usdc.approve(campaignAddress, parsedAmount);
-        await tx.wait();
+        toast.info("Sending approval…");
+
+        const approveTx = await usdc.approve(campaignAddress, parsedAmount);
+
+        toast.info("Waiting for approval confirmations…");
+
+        // 🔥 Wait for 2 confirmations to ensure allowance is indexed
+        await approveTx.wait(2);
+
+        // 🔄 Double-check allowance to avoid race conditions
+        let updatedAllowance = await usdc.allowance(address, campaignAddress);
+        while (updatedAllowance < parsedAmount) {
+          await new Promise((resolve) => setTimeout(resolve, 600)); 
+          updatedAllowance = await usdc.allowance(address, campaignAddress);
+        }
+
         toast.success("USDC approved!");
       }
 

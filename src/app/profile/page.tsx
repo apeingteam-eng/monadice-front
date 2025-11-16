@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import ProfileHeader from "@/features/user/components/ProfileHeader";
 import BetHistoryList, { Bet } from "@/features/user/components/BetHistoryList";
 import WinLossChart from "@/features/user/components/WinLossChart";
 import StatsCard from "@/features/user/components/StatsCard";
 import PortfolioCard from "@/features/user/components/PortfolioCard";
+
 import { getMe, UserMeResponse, getAuthHeader } from "@/features/user/utils/userService";
 import { getUserBets, UserBet } from "@/features/user/utils/betService";
+
+import CreatedBetsList from "@/features/user/components/CreatedBetsList";
+
 import api from "@/config/api";
 
 /* -------------------------
@@ -29,6 +34,9 @@ export interface Campaign {
   campaign_address: string;
   outcome_true: boolean | null;
   state: string;
+  end_time: number;
+  fee_bps: number;
+  category: string;
 }
 
 /* -------------------------
@@ -42,18 +50,31 @@ async function getUserSummary(): Promise<UserSummary> {
 
 async function getCampaignByAddress(campaignAddress: string): Promise<Campaign | null> {
   try {
-    // fallback: try to find by address
-    const all = await api.get<{ campaigns: Campaign[] }>("/factory/all-campaigns");
-    const campaign = all.data.campaigns.find(
-      (c) => c.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
+    const res = await api.get<Campaign[]>("/factory/campaigns");  // <-- array
+    const all = res.data;
+
+    if (!Array.isArray(all)) {
+      console.error("Unexpected /factory/campaigns shape:", all);
+      return null;
+    }
+
+    return (
+      all.find(
+        (c) =>
+          c.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
+      ) || null
     );
-    return campaign || null;
   } catch (err) {
-    console.error("Failed to find campaign:", err);
+    console.error("Failed to fetch /factory/campaigns:", err);
     return null;
   }
 }
 
+async function getMyCreatedBets() {
+  const headers = await getAuthHeader();
+  const res = await api.get<{ campaigns: Campaign[] }>("/bet/me/created-bets", { headers });
+  return res.data.campaigns;
+}
 
 /* -------------------------
    🧠 Main Component
@@ -62,10 +83,14 @@ export default function ProfilePage() {
   const [user, setUser] = useState<UserMeResponse | null>(null);
   const [summary, setSummary] = useState<UserSummary | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
+  const [createdBets, setCreatedBets] = useState<Campaign[]>([]);
+
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -73,29 +98,31 @@ export default function ProfilePage() {
       try {
         setLoading(true);
 
-        // ⏬ Parallel API calls
-        const [userData, summaryData, userBets] = await Promise.all([
+        const [userData, summaryData, userBets, created] = await Promise.all([
           getMe(),
           getUserSummary(),
           getUserBets(),
+          getMyCreatedBets(),
         ]);
 
         setUser(userData);
         setSummary(summaryData);
+        setCreatedBets(created as Campaign[]);
 
-        // Transform backend UserBet → UI Bet
-        const mappedBets: Bet[] = userBets.map((b) => ({
+        /* -----------------------
+           Transform user bet history
+        ------------------------ */
+        const mappedBets: Bet[] = userBets.map((b: UserBet) => ({
           id: b.id,
           campaign_address: b.campaign_address,
           outcome: b.side ? "Yes" : "No",
           stake: b.stake,
-          status: "Pending",
+          status: "Pending" as const,
           created_at: b.created_at,
         }));
 
-        // Fetch campaign outcomes in parallel
         const campaigns = await Promise.all(
-          userBets.map((b) => getCampaignByAddress(b.campaign_address))
+          userBets.map((b: UserBet) => getCampaignByAddress(b.campaign_address))
         );
 
         let winCount = 0;
@@ -118,7 +145,7 @@ export default function ProfilePage() {
           }
         });
 
-        setBets(updatedBets);
+        setBets(updatedBets as Bet[]);
         setWins(winCount);
         setLosses(lossCount);
       } catch (err) {
@@ -195,34 +222,44 @@ export default function ProfilePage() {
             totalClaimed={summary.total_claimed}
           />
         </div>
+
         <StatsCard label="Wins" value={wins} />
         <StatsCard label="Losses" value={losses} />
+
         <StatsCard
           label="PnL"
-          value={`${summary.total_profit >= 0 ? "+" : ""}${summary.total_profit.toFixed(3)} USDC`}
+          value={`${summary.total_profit >= 0 ? "+" : ""}${summary.total_profit.toFixed(
+            3
+          )} USDC`}
         />
       </div>
 
-      {/* Bets + Notes */}
-      <div className="px-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 space-y-4">
-          <WinLossChart wins={wins} losses={losses} />
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <h3 className="text-base font-semibold mb-2">Recent Bets</h3>
-            <BetHistoryList bets={bets} />
-          </div>
-        </div>
+      {/* Main content */}
+      {/* Main content */}
+<div className="px-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div className="md:col-span-2 space-y-4">
+    <WinLossChart wins={wins} losses={losses} />
 
-        <div className="md:col-span-1 space-y-4">
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <h3 className="text-base font-semibold mb-2">Notes</h3>
-            <p className="text-sm text-neutral-400">
-              Manage your on-chain activity and track your performance over
-              time.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <h3 className="text-base font-semibold mb-2">Recent Bets</h3>
+      <BetHistoryList bets={bets} />
+    </div>
+  </div>
+
+  <div className="md:col-span-1 space-y-4">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <h3 className="text-base font-semibold mb-2">Notes</h3>
+      <p className="text-sm text-neutral-400">
+        Manage your on-chain activity and track your performance over time.
+      </p>
+    </div>
+  </div>
+</div>
+
+{/* ✅ FULL WIDTH CREATED MARKETS */}
+<div className="px-6">
+  <CreatedBetsList campaigns={createdBets} />
+</div>
     </div>
   );
 }

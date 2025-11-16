@@ -198,14 +198,20 @@ export default function CreateMarketPage() {
           <div>
             <label className="text-sm text-neutral-300 mb-1">End Date & Time</label>
             <ReactDatePicker
-              selected={selectedDate}
-              onChange={setSelectedDate}
-              showTimeSelect
-              timeIntervals={5}
-              dateFormat="dd.MM.yyyy HH:mm"
-              minDate={minSelectableDate}
-              className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2"
-            />
+    selected={selectedDate}
+    onChange={setSelectedDate}
+    showTimeSelect
+    timeIntervals={5}
+    dateFormat="dd.MM.yyyy HH:mm"
+    minDate={minSelectableDate}
+    minTime={
+        selectedDate &&
+        selectedDate.toDateString() === minSelectableDate.toDateString()
+            ? minSelectableDate
+            : new Date(selectedDate?.setHours(0, 0, 0, 0) || 0)
+    }
+maxTime={new Date(new Date().setHours(23, 59, 59, 999))}    className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2"
+/>
           </div>
 
           {/* Button 1 — VERIFY */}

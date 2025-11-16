@@ -26,6 +26,7 @@ export default function CreateMarketTwoStep() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("CRYPTO");
   const [endTime, setEndTime] = useState("");
+  const [minEndTime, setMinEndTime] = useState("");
 
   // Verification state
   const [verifiedDraft, setVerifiedDraft] = useState<boolean | null>(null);
@@ -63,6 +64,31 @@ export default function CreateMarketTwoStep() {
 
     checkAllowance();
   }, [signer, address]);
+
+  /* --------------------------- MIN END TIME SETUP ---------------------------- */
+  useEffect(() => {
+    function computeMinEndTime() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 10);
+
+      const rounded = new Date(now);
+      const roundedMinutes = Math.ceil(rounded.getMinutes() / 5) * 5;
+      rounded.setMinutes(roundedMinutes, 0, 0);
+
+      const year = rounded.getFullYear();
+      const month = String(rounded.getMonth() + 1).padStart(2, "0");
+      const day = String(rounded.getDate()).padStart(2, "0");
+      const hours = String(rounded.getHours()).padStart(2, "0");
+      const minutes = String(rounded.getMinutes()).padStart(2, "0");
+
+      const localStr = `${year}-${month}-${day}T${hours}:${minutes}`;
+      setMinEndTime(localStr);
+    }
+
+    computeMinEndTime();
+    const interval = setInterval(computeMinEndTime, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   /* --------------------------- VERIFY CAMPAIGN ---------------------------- */
   const handleVerifyDraft = async () => {
@@ -238,7 +264,45 @@ export default function CreateMarketTwoStep() {
           type="datetime-local"
           className="w-full mt-1 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-md"
           value={endTime}
-          onChange={(e) => setEndTime(e.target.value)}
+          min={minEndTime || undefined}
+          onFocus={(e) => {
+            if (minEndTime) {
+              e.target.min = minEndTime;
+            }
+          }}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (!value) {
+              setEndTime("");
+              return;
+            }
+
+            const selected = new Date(value);
+
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 10);
+
+            const rounded = new Date(now);
+            const roundedMinutes = Math.ceil(rounded.getMinutes() / 5) * 5;
+            rounded.setMinutes(roundedMinutes, 0, 0);
+
+            if (selected < rounded) {
+              const year = rounded.getFullYear();
+              const month = String(rounded.getMonth() + 1).padStart(2, "0");
+              const day = String(rounded.getDate()).padStart(2, "0");
+              const hours = String(rounded.getHours()).padStart(2, "0");
+              const minutes = String(rounded.getMinutes()).padStart(2, "0");
+              const corrected = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+              setError("End time automatically corrected to the nearest valid time.");
+              setEndTime(corrected);
+              e.target.value = corrected;
+              return;
+            }
+
+            setError(null);
+            setEndTime(value);
+          }}
         />
       </div>
 
