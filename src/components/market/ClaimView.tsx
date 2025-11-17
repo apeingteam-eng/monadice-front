@@ -285,29 +285,49 @@ console.log("🟪 RENDER FLAGS", {
     );
   }
 
-  /* ------------------------------ WON ------------------------------ */
+ /* ------------------------------ WON (purple themed) ------------------------------ */
+if (winningTickets.length > 0) {
   return (
-    <div className="border border-green-600 bg-green-900/20 p-4 rounded-lg space-y-3">
-      <h3 className="text-green-300 font-semibold">🎉 You predicted correctly!</h3>
+    <div className="border border-accentPurple/60 bg-accentPurple/10 p-5 rounded-lg space-y-4 shadow-[0_0_20px_rgba(155,93,229,0.25)]">
+      <h3 className="text-accentPurple text-lg font-semibold flex items-center gap-2">
+      Your prediction is correct!
+      </h3>
 
-      <p className="text-neutral-300">
-        Winning tickets:{" "}
-        <span className="text-green-400 font-bold">{winningTickets.length}</span>
-      </p>
+      <div className="space-y-1 text-neutral-300 text-sm">
+        <p>
+          Winning tickets:{" "}
+          <span className="text-accentPurple font-bold">
+            {winningTickets.length}
+          </span>
+        </p>
 
-      <p className="text-neutral-300">
-        Estimated payout:{" "}
-        <span className="text-green-300 font-bold">
-          ${totalPayout.toFixed(2)}
-        </span>
-      </p>
+        {/* 🟣 SHOW WINNING TICKET IDS */}
+        <p>
+          Ticket IDs:{" "}
+          <span className="font-mono text-accentPurple font-semibold">
+            {winningTickets.map((t) => `#${t.id}`).join(", ")}
+          </span>
+        </p>
+
+        <p>
+          Estimated payout:{" "}
+          <span className="text-accentPurple font-bold">
+            ${totalPayout.toFixed(2)}
+          </span>
+        </p>
+      </div>
 
       <button
         onClick={claimAll}
-        className="w-full mt-3 py-2 rounded-md bg-green-700 hover:bg-green-600 font-medium"
+        className="
+          w-full py-2 mt-2 rounded-md
+          bg-accentPurple hover:bg-accentPurple/80
+          text-white font-medium transition
+        "
       >
         Claim Rewards
       </button>
     </div>
   );
+}
 }

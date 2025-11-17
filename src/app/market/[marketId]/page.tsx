@@ -9,6 +9,7 @@ import { CHAIN } from "@/config/network";
 import PlaceBetForm from "@/components/PlaceBetForm";
 import { useToast } from "@/components/toast/ToastContext";
 import ClaimView from "@/components/market/ClaimView";
+import TicketGallery from "@/components/market/TicketGallery";
 /* -------------------------------------------------------------------------- */
 /*                              Types / Helpers                               */
 /* -------------------------------------------------------------------------- */
@@ -286,10 +287,25 @@ const bettingClosed = isPending || isFinished;
  <ClaimView
   campaignAddress={campaign.campaign_address as `0x${string}`}
   endTime={campaign.end_time}
+  
 />
 )}
+
 </div>
+
       </div>
+    <div className="p-6">
+  <TicketGallery
+    campaignAddress={campaign.campaign_address as `0x${string}`}
+    endTime={campaign.end_time}
+    state={
+      campaign.state === "open" ? 0 :
+      campaign.state === "resolved" ? 1 :
+      campaign.state === "cancelled" ? 2 :
+      0
+    }
+  />
+</div>
     </div>
   );
 }
