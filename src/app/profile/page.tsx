@@ -84,7 +84,7 @@ export default function ProfilePage() {
   const [summary, setSummary] = useState<UserSummary | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [createdBets, setCreatedBets] = useState<Campaign[]>([]);
-
+const [marketTitles, setMarketTitles] = useState<Record<string, string>>({});
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
 
@@ -112,15 +112,23 @@ export default function ProfilePage() {
         /* -----------------------
            Transform user bet history
         ------------------------ */
-        const mappedBets: Bet[] = userBets.map((b: UserBet) => ({
-          id: b.id,
-          campaign_address: b.campaign_address,
-          outcome: b.side ? "Yes" : "No",
-          stake: b.stake,
-          status: "Pending" as const,
-          created_at: b.created_at,
-        }));
+       const mappedBets: Bet[] = userBets.map((b: UserBet) => ({
+  id: b.id,
+  campaign_address: b.campaign_address,
+  ticket_id: b.ticket_id,
+  side: b.side,
+  stake: b.stake,
+  payout: b.payout,             // backend may return null
+  claimed: b.claimed,
+  created_at: b.created_at,
 
+  // Derived fields
+  outcome: b.side ? "Yes" : "No",
+  status: "Pending",
+  pnl: b.claimed
+    ? b.payout ?? -b.stake     // if claimed, use payout or negative stake
+    : 0,                       // if not claimed yet
+}));
         const campaigns = await Promise.all(
           userBets.map((b: UserBet) => getCampaignByAddress(b.campaign_address))
         );
@@ -144,7 +152,14 @@ export default function ProfilePage() {
             return { ...bet, status: "Lost" as const };
           }
         });
-
+// Build market title map
+const marketTitles: Record<string, string> = {};
+campaigns.forEach((c) => {
+  if (c) {
+    marketTitles[c.campaign_address] = c.name || "Unknown Market";
+  }
+});
+setMarketTitles(marketTitles);
         setBets(updatedBets as Bet[]);
         setWins(winCount);
         setLosses(lossCount);
@@ -240,10 +255,10 @@ export default function ProfilePage() {
   <div className="md:col-span-2 space-y-4">
     <WinLossChart wins={wins} losses={losses} />
 
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-      <h3 className="text-base font-semibold mb-2">Recent Bets</h3>
-      <BetHistoryList bets={bets} />
-    </div>
+  <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+  <h3 className="text-base font-semibold mb-2">Recent Bets</h3>
+  <BetHistoryList bets={bets} marketTitles={marketTitles} />
+</div>
   </div>
 
   <div className="md:col-span-1 space-y-4">

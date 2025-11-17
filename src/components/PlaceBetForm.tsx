@@ -54,7 +54,6 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error("Failed to fetch payout");
 
-        // 👇 Correct shape
         const json = (await res.json()) as PayoutResponse;
 
         if (
@@ -63,10 +62,9 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
         ) {
           setPayoutData(json);
         } else {
-          console.error("Unexpected payout format:", json);
           setPayoutData(null);
         }
-      } catch (err) {
+      } catch {
         setPayoutData(null);
       } finally {
         setFetchingPayout(false);
@@ -117,7 +115,7 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
       const parsedAmount = parseUnits(amount, USDC_DECIMALS);
 
-      toast.info("Checking allowance...");
+      toast.info("Checking allowance…");
 
       const allowance: bigint = await usdc.allowance(address, campaignAddress);
       if (allowance < parsedAmount) {
@@ -127,36 +125,84 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
         toast.info("Waiting for approval confirmations…");
 
-        // 🔥 Wait for 2 confirmations to ensure allowance is indexed
         await approveTx.wait(2);
 
-        // 🔄 Double-check allowance to avoid race conditions
+        // Double check allowance
         let updatedAllowance = await usdc.allowance(address, campaignAddress);
         while (updatedAllowance < parsedAmount) {
-          await new Promise((resolve) => setTimeout(resolve, 600)); 
+          await new Promise((resolve) => setTimeout(resolve, 500));
           updatedAllowance = await usdc.allowance(address, campaignAddress);
         }
 
         toast.success("USDC approved!");
       }
 
-      toast.info("Placing bet...");
-      const side = outcome === "Yes" ? 1 : 0;
+      toast.info("Placing bet…");
 
+      const side = outcome === "Yes" ? 1 : 0;
       const tx = await campaign.join(side, parsedAmount);
       await tx.wait();
 
+/* ---------------------- Extract TICKET ID ---------------------- */
+const receipt = await provider.getTransactionReceipt(tx.hash);
+if (!receipt) {
+  toast.error("Could not load transaction receipt.");
+  setLoading(false);
+  return;
+}
+
+let ticketId: number | null = null;
+
+for (const log of receipt.logs) {
+  // Only parse events emitted by this BetCampaign contract
+  if (log.address.toLowerCase() !== campaignAddress.toLowerCase()) continue;
+
+  let parsed;
+  try {
+    parsed = campaign.interface.parseLog(log);
+  } catch {
+    continue; // skip logs that do not match this ABI
+  }
+
+  // TS-SAFE: check parsed is not null
+  if (parsed && parsed.name === "Joined") {
+    ticketId = Number(parsed.args.ticketId);
+    break;
+  }
+}
+
+if (ticketId === null) {
+  toast.error("Could not extract ticket ID from logs.");
+  setLoading(false);
+  return;
+}
       toast.success("Bet placed!");
 
-      // Sync backend
+      /* ---------------------- SAVE BET TO BACKEND ---------------------- */
       try {
-        const sync = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/bet/sync-bets?campaign_address=${campaignAddress}`
-        );
-        if (!sync.ok) throw new Error("Sync failed");
-        toast.success("Synced with backend!");
-      } catch {
-        toast.error("Bet placed, but backend sync failed.");
+     const token = localStorage.getItem("access_token");
+
+const saveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bet/save`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    campaign_address: campaignAddress,
+    ticket_id: ticketId,
+    side,
+    stake: amount,
+    tx_hash: tx.hash,
+  }),
+});
+
+        if (!saveRes.ok) throw new Error("Save failed");
+
+        toast.success("Bet saved!");
+      } catch (err) {
+        console.error("Save bet error:", err);
+        toast.error("Bet placed but failed saving to backend.");
       }
     } catch (err: unknown) {
       console.error("Bet error:", err);

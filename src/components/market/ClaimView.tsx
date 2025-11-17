@@ -27,6 +27,8 @@ export default function ClaimView({
 }: ClaimViewProps) {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+
+  
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -105,12 +107,15 @@ export default function ClaimView({
 
           const t = await contract.tickets(i);
 
-          owned.push({
-            id: Number(t.id),
-            side: Number(t.side),
-            stake: Number(t.stake) / 1e6,
-            claimed: t.claimed,
-          });
+          const rawSide = t.side;        // boolean from contract
+const side = rawSide ? 0 : 1;  // true → YES → 0, false → NO → 1
+
+owned.push({
+  id: Number(t.id),
+  side,
+  stake: Number(t.stake) / 1e6,
+  claimed: t.claimed,
+});
           console.log(`Ticket ${Number(t.id)} FE says win= side=${Number(t.side)}`);
         } catch {
           // ignore tickets that revert (burned / non-existent)
@@ -125,10 +130,10 @@ export default function ClaimView({
       if (Number(s) === 1) {
         // ⚠️ From your logs: when outcomeTrue = false → side = 1 wins
         //                   when outcomeTrue = true  → side = 0 wins
-        const winners = owned.filter((t) => {
-          const didWin = outcome ? t.side === 1 : t.side === 0;
-          return !t.claimed && didWin;
-        });
+       const winners = owned.filter((t) => {
+  const didWin = outcome ? t.side === 0 : t.side === 1;  
+  return !t.claimed && didWin;
+});
 
         console.log("🏆 Winning tickets:", winners);
         setWinningTickets(winners);
@@ -157,27 +162,89 @@ export default function ClaimView({
   }
 
   /* ------------------------------ Claim All ------------------------------ */
-  async function claimAll() {
-    try {
-      for (const t of winningTickets) {
-        await writeContractAsync({
-          address: campaignAddress,
-          abi: BetCampaignABI,
-          functionName: "claim",
-          args: [t.id],
-        });
+ /* ------------------------------ Claim All ------------------------------ */
+async function claimAll() {
+  try {
+    // 🔥 Recompute payout values here (so ClaimView has everything locally)
+    const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+    const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-        toast.success(`Claimed ticket #${t.id}`);
+    const totalTrue: bigint = await contract.totalTrue();
+    const totalFalse: bigint = await contract.totalFalse();
+    const totalInitialPot: bigint = await contract.totalInitialPot();
+    const feeBps: bigint = await contract.feeBps();
+
+    const pool =
+      Number(totalTrue) / 1e6 +
+      Number(totalFalse) / 1e6 +
+      Number(totalInitialPot) / 1e6;
+
+    const fee = pool * Number(feeBps) / 10000;
+    const distributable = pool - fee;
+
+    // Winners total
+    const winnersTot =
+      outcomeTrue
+        ? Number(totalTrue) / 1e6
+        : Number(totalFalse) / 1e6;
+
+    for (const t of winningTickets) {
+      // 1️⃣ Claim on-chain
+      const tx = await writeContractAsync({
+        address: campaignAddress,
+        abi: BetCampaignABI,
+        functionName: "claim",
+        args: [t.id],
+      });
+
+      toast.success(`Claimed ticket #${t.id}`);
+
+      const txHash = tx;
+
+      // 2️⃣ Compute payout for this ticket
+      const payout =
+        winnersTot > 0
+          ? (t.stake * distributable) / winnersTot
+          : 0;
+
+      // 3️⃣ Save to backend
+      try {
+        const token = localStorage.getItem("access_token");
+
+        const saveRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/bet/claim`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              campaign_address: campaignAddress,
+              ticket_id: t.id,
+              payout,
+              tx_hash: txHash,
+            }),
+          }
+        );
+
+        if (!saveRes.ok) {
+          const errText = await saveRes.text();
+          console.error("Backend claim error:", errText);
+          toast.error(`Could not save claim for #${t.id}`);
+        }
+      } catch (err) {
+        console.error("Claim save error:", err);
       }
-
-      toast.success("All claims completed!");
-      loadAll();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Claim failed";
-      toast.error(message);
     }
-  }
 
+    toast.success("All claims completed!");
+    loadAll();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Claim failed";
+    toast.error(message);
+  }
+}
   /* ------------------------------- Render ------------------------------- */
   if (loading) {
     return <p className="text-neutral-400">Loading claim data...</p>;

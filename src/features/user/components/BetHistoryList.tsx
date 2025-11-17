@@ -1,106 +1,154 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
+/* --------------------------------------------------------------
+   Bet Type
+-------------------------------------------------------------- */
 export type Bet = {
-  id: string | number;
-  marketId?: string;
-  marketTitle?: string;
-  campaign_address?: string; // ✅ optional now
-  outcome: string;
+  id: number;
+  campaign_address: string;
+  ticket_id: number;
+  side: boolean; // true = YES, false = NO
   stake: number;
+  payout: number | null;
+  claimed: boolean;
+  created_at: string;
+
+  // ✨ derived values
   status: "Pending" | "Won" | "Lost";
-  created_at?: string;
+  outcome: "Yes" | "No";
+  pnl: number; // +payout or -stake
 };
 
 type BetHistoryListProps = {
-  bets?: Bet[];
+  bets: Bet[];
+  marketTitles: Record<string, string>; // 🔥 address → title
 };
 
-// Dummy fallback for visual state
-const dummyBets: Bet[] = [
-  {
-    id: "b1",
-    marketId: "btc-100k-2025",
-    marketTitle: "Bitcoin to close above $100k in 2025",
-    outcome: "Yes",
-    stake: 250,
-    status: "Pending",
-  },
-  {
-    id: "b2",
-    marketId: "nyc-mayor-2025",
-    marketTitle: "New York City Mayoral Election",
-    outcome: "No",
-    stake: 100,
-    status: "Won",
-  },
-  {
-    id: "b3",
-    marketId: "eth-etf-approval",
-    marketTitle: "ETH Spot ETF approved by year-end",
-    outcome: "Yes",
-    stake: 75,
-    status: "Lost",
-  },
-];
-
+/* --------------------------------------------------------------
+   Status badge
+-------------------------------------------------------------- */
 function StatusBadge({ status }: { status: Bet["status"] }) {
   const cls =
     status === "Won"
-      ? "bg-accentPurple/15 text-accentPurple"
+      ? "bg-green-500/15 text-green-400"
       : status === "Lost"
       ? "bg-red-500/15 text-red-400"
-      : "bg-neutral-500/15 text-neutral-300";
+      : "bg-yellow-500/15 text-yellow-400";
+
   return <span className={`px-2 py-1 rounded text-xs ${cls}`}>{status}</span>;
 }
 
-export default function BetHistoryList({ bets }: BetHistoryListProps) {
-  const displayBets = bets && bets.length > 0 ? bets : dummyBets;
+/* --------------------------------------------------------------
+   MAIN COMPONENT (GROUPED BY CAMPAIGN)
+-------------------------------------------------------------- */
+export default function BetHistoryList({
+  bets,
+  marketTitles = {},
+}: BetHistoryListProps) {
+  const grouped = bets.reduce((acc: any, b: Bet) => {
+    if (!acc[b.campaign_address]) acc[b.campaign_address] = [];
+    acc[b.campaign_address].push(b);
+    return acc;
+  }, {});
+
+  const campaigns = Object.entries(grouped);
+
+  if (campaigns.length === 0) {
+    return <p className="text-neutral-400 mt-4">You have no recent betting activity.</p>;
+  }
 
   return (
-    <div className="space-y-2 text-sm">
-      {/* Header */}
-      <div className="grid grid-cols-4 gap-2 text-xs text-neutral-500 px-2">
-        <div>Market</div>
-        <div>Outcome</div>
-        <div>Stake</div>
-        <div>Status</div>
-      </div>
+    <div className="space-y-4 mt-4">
+      {campaigns.map(([address, betList]: any) => (
+        <CampaignAccordion
+          key={address}
+          address={address}
+          bets={betList as Bet[]}
+          title={marketTitles?.[address] || "Unknown Market"}
+        />
+      ))}
+    </div>
+  );
+}
+/* --------------------------------------------------------------
+   Collapsible GROUP SECTION for one campaign
+-------------------------------------------------------------- */
+function CampaignAccordion({
+  address,
+  bets,
+  title,
+}: {
+  address: string;
+  bets: Bet[];
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
 
-      {/* Table body */}
-      <div className="divide-y divide-neutral-800 rounded-xl border border-neutral-800 overflow-hidden">
-        {displayBets.map((b) => (
-          <div
-            key={b.id}
-            className="grid grid-cols-4 gap-2 items-center px-3 py-2 bg-neutral-900/50 hover:bg-neutral-900 transition-colors"
-          >
-            <Link
-              href={`/market/${b.marketId || b.id}`}
-              className="truncate hover:underline text-white"
+  const shortened = `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50">
+      {/* HEADER */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex justify-between items-center px-4 py-3 hover:bg-neutral-900"
+      >
+        <div className="flex flex-col text-left">
+          <span className="font-medium text-white">{title}</span>
+          <span className="text-xs text-neutral-400">Market {shortened}</span>
+        </div>
+
+        <span className="text-neutral-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* BODY */}
+      {open && (
+        <div className="divide-y divide-neutral-800">
+          {bets.map((b) => (
+            <div
+              key={b.id}
+              className="flex items-center justify-between px-4 py-3"
             >
-              {b.marketTitle ||
-                (b.campaign_address
-                  ? `${b.campaign_address.slice(0, 6)}…${b.campaign_address.slice(
-                      -4
-                    )}`
-                  : "—")}
-            </Link>
-            <div>{b.outcome}</div>
-            <div>${b.stake.toFixed(2)}</div>
-            <div>
-              <StatusBadge status={b.status} />
-            </div>
-          </div>
-        ))}
-      </div>
+              {/* LEFT */}
+              <div>
+                <Link
+                  href={`/market/${address}`}
+                  className="text-neutral-300 hover:underline text-sm"
+                >
+                  Ticket #{b.ticket_id}
+                </Link>
 
-      {/* Footer */}
-      <div className="pt-2">
-        <button className="text-xs text-accentPurple hover:underline">
-          View All
-        </button>
-      </div>
+                <p className="text-sm text-neutral-300">Outcome: {b.outcome}</p>
+
+                <p className="text-sm text-neutral-300">
+                  Stake: <span className="font-medium">${b.stake.toFixed(2)}</span>
+                </p>
+
+                {/* 🔥 Show cashout or loss */}
+                {b.claimed && (
+                  <p
+                    className={`text-sm font-medium ${
+                      b.pnl >= 0 ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {b.pnl >= 0
+                      ? `Cashed Out: +${b.pnl.toFixed(3)} USDC`
+                      : `Lost: -${Math.abs(b.stake).toFixed(3)} USDC`}
+                  </p>
+                )}
+              </div>
+
+              {/* RIGHT */}
+              <div className="text-right">
+                <StatusBadge status={b.status} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

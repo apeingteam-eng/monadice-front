@@ -76,50 +76,49 @@ export default function TicketGallery({
       const result: GalleryTicket[] = [];
 
       for (let i = 1; i < nextId; i++) {
-        try {
-          const owner = await contract.ownerOf(i);
-          if (owner.toLowerCase() !== address.toLowerCase()) continue;
+  try {
+    const owner = await contract.ownerOf(i);
+    if (owner.toLowerCase() !== address.toLowerCase()) continue;
 
-          const t = await contract.tickets(i);
-          const stake = Number(t.stake) / 1e6;
-          const side = Number(t.side);
+    const t = await contract.tickets(i);
+    const stake = Number(t.stake) / 1e6;
 
-          let won = false;
-          let pnl = 0;
+    // --- FIXED SIDE MAPPING ---
+    const rawSide = t.side;       // boolean
+    const side = rawSide ? 0 : 1; // true=yes →0, false=no →1
 
-          if (isResolved) {
-            won = outcome ? side === 1 : side === 0;
-            if (won) {
-              const winnersTotal = outcome ? tTrue : tFalse;
-              pnl = (stake / winnersTotal) * distributable;
-            } else {
-              pnl = -stake;
-            }
-          } else {
-            // Running or pending → potential payout
-            const isSideTrue = side === 0;
-            const sideTotal = isSideTrue ? tTrue : tFalse;
+    let won = false;
+    let pnl = 0;
 
-            pnl =
-              sideTotal > 0
-                ? (stake / sideTotal) * distributable
-                : stake; // fallback if no liquidity
-          }
+    if (isResolved) {
+      // --- FIXED WIN LOGIC ---
+      won = outcome ? side === 0 : side === 1;
 
-          result.push({
-            id: i,
-            side,
-            stake,
-            claimed: t.claimed,
-            won,
-            pnl,
-            imageUrl: i <= 6 ? `/monadice${i}.png` : `/monadice6.png`,
-          });
-        } catch {
-          /* ignore missing tickets */
-        }
+      if (won) {
+        const winnersTotal = outcome ? tTrue : tFalse;
+        pnl = winnersTotal > 0 ? (stake / winnersTotal) * distributable : 0;
+      } else {
+        pnl = -stake;
       }
+    } else {
+      const isSideTrue = side === 0;
+      const sideTotal = isSideTrue ? tTrue : tFalse;
+      pnl = sideTotal > 0 ? (stake / sideTotal) * distributable : stake;
+    }
 
+    result.push({
+      id: i,
+      side,
+      stake,
+      claimed: t.claimed,
+      won,
+      pnl,
+      imageUrl: i <= 6 ? `/monadice${i}.png` : `/monadice6.png`,
+    });
+  } catch {
+    /* ignore missing tickets */
+  }
+}
       setTickets(result);
     } finally {
       setLoading(false);
@@ -131,27 +130,87 @@ export default function TicketGallery({
   }, [load]);
 
   /* ------------------------------- CLAIM FUNC ------------------------------- */
-  async function claimTicket(ticketId: number) {
-    try {
-      setClaimingId(ticketId);
+ async function claimTicket(ticketId: number) {
+  try {
+    setClaimingId(ticketId);
 
-      await writeContractAsync({
-        address: campaignAddress,
-        abi: BetCampaignABI,
-        functionName: "claim",
-        args: [ticketId],
-      });
+    const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+    const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-      toast.success(`Claimed ticket #${ticketId}`);
-      await load();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Claim failed";
-      toast.error(message);
-    } finally {
-      setClaimingId(null);
+    // --- READ ON-CHAIN VALUES ---
+    const t = await contract.tickets(ticketId);
+    const stake = Number(t.stake) / 1e6;
+    const side = Number(t.side);
+
+    const tTrue = Number(await contract.totalTrue()) / 1e6;
+    const tFalse = Number(await contract.totalFalse()) / 1e6;
+    const tPot = Number(await contract.totalInitialPot()) / 1e6;
+    const fBps = Number(await contract.feeBps());
+    const outcome = await contract.outcomeTrue();
+
+    const pool = tTrue + tFalse + tPot;
+    const fee = (pool * fBps) / 10000;
+    const distributable = pool - fee;
+
+    // Winner group total
+    const winnersTot = outcome ? tTrue : tFalse;
+
+    // FINAL TICKET PAYOUT
+    let payout = 0;
+    const won = outcome ? side === 1 : side === 0;
+
+    if (won && winnersTot > 0) {
+      payout = (stake / winnersTot) * distributable;
     }
+
+    // --- 1️⃣ CLAIM ON-CHAIN ---
+    const txHash = await writeContractAsync({
+      address: campaignAddress,
+      abi: BetCampaignABI,
+      functionName: "claim",
+      args: [ticketId],
+    });
+
+    toast.success(`Claimed ticket #${ticketId}`);
+
+    // --- 2️⃣ SAVE TO BACKEND ---
+    try {
+      const token = localStorage.getItem("access_token");
+
+      const saveRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/bet/claim`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            campaign_address: campaignAddress,
+            ticket_id: ticketId,
+            payout,
+            tx_hash: txHash,
+          }),
+        }
+      );
+
+      if (!saveRes.ok) {
+        const errText = await saveRes.text();
+        console.error("Backend claim error:", errText);
+        toast.error(`Could not save claim for #${ticketId}`);
+      }
+    } catch (err) {
+      console.error("Claim save error:", err);
+    }
+
+    await load();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Claim failed";
+    toast.error(message);
+  } finally {
+    setClaimingId(null);
   }
+}
 
   /* ------------------------------- UI ------------------------------- */
 
@@ -193,7 +252,7 @@ export default function TicketGallery({
                     ${
                       t.side === 0
                         ? "bg-accentPurple/20 text-accentPurple"
-                        : "bg-red-500/20 text-red-400"
+                        : "bg-accentPurple/20 text-accentPurple"
                     }`}
                 >
                   {t.side === 0 ? "YES" : "NO"}
