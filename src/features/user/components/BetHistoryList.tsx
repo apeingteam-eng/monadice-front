@@ -10,22 +10,24 @@ export type Bet = {
   id: number;
   campaign_address: string;
   ticket_id: number;
-  side: boolean; // true = YES, false = NO
+  side: boolean;
   stake: number;
   payout: number | null;
   claimed: boolean;
   created_at: string;
 
-  // ✨ derived values
   status: "Pending" | "Won" | "Lost";
   outcome: "Yes" | "No";
-  pnl: number; // +payout or -stake
+  pnl: number;
 };
 
 type BetHistoryListProps = {
   bets: Bet[];
-  marketTitles: Record<string, string>; // 🔥 address → title
+  marketTitles: Record<string, string>;
 };
+
+/* Grouped bets type */
+type GroupedBets = Record<string, Bet[]>;
 
 /* --------------------------------------------------------------
    Status badge
@@ -48,33 +50,39 @@ export default function BetHistoryList({
   bets,
   marketTitles = {},
 }: BetHistoryListProps) {
-  const grouped = bets.reduce((acc: any, b: Bet) => {
+  // Remove any ➜ use GroupedBets
+  const grouped: GroupedBets = bets.reduce((acc, b) => {
     if (!acc[b.campaign_address]) acc[b.campaign_address] = [];
     acc[b.campaign_address].push(b);
     return acc;
-  }, {});
+  }, {} as GroupedBets);
 
-  const campaigns = Object.entries(grouped);
+  const campaigns = Object.entries(grouped); // [address, Bet[]][]
 
   if (campaigns.length === 0) {
-    return <p className="text-neutral-400 mt-4">You have no recent betting activity.</p>;
+    return (
+      <p className="text-neutral-400 mt-4">
+        You have no recent betting activity.
+      </p>
+    );
   }
 
   return (
     <div className="space-y-4 mt-4">
-      {campaigns.map(([address, betList]: any) => (
+      {campaigns.map(([address, betList]) => (
         <CampaignAccordion
           key={address}
           address={address}
-          bets={betList as Bet[]}
-          title={marketTitles?.[address] || "Unknown Market"}
+          bets={betList}
+          title={marketTitles[address] || "Unknown Market"}
         />
       ))}
     </div>
   );
 }
+
 /* --------------------------------------------------------------
-   Collapsible GROUP SECTION for one campaign
+   Collapsible GROUP SECTION
 -------------------------------------------------------------- */
 function CampaignAccordion({
   address,
@@ -98,7 +106,9 @@ function CampaignAccordion({
       >
         <div className="flex flex-col text-left">
           <span className="font-medium text-white">{title}</span>
-          <span className="text-xs text-neutral-400">Market {shortened}</span>
+          <span className="text-xs text-neutral-400">
+            Market {shortened}
+          </span>
         </div>
 
         <span className="text-neutral-400 text-xs">{open ? "▲" : "▼"}</span>
@@ -121,13 +131,17 @@ function CampaignAccordion({
                   Ticket #{b.ticket_id}
                 </Link>
 
-                <p className="text-sm text-neutral-300">Outcome: {b.outcome}</p>
-
                 <p className="text-sm text-neutral-300">
-                  Stake: <span className="font-medium">${b.stake.toFixed(2)}</span>
+                  Outcome: {b.outcome}
                 </p>
 
-                {/* 🔥 Show cashout or loss */}
+                <p className="text-sm text-neutral-300">
+                  Stake:{" "}
+                  <span className="font-medium">
+                    ${b.stake.toFixed(2)}
+                  </span>
+                </p>
+
                 {b.claimed && (
                   <p
                     className={`text-sm font-medium ${
