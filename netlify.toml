@@ -5,4 +5,11 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Do NOT use [[plugins]] block at all — we skip plugin registration
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Ensure flame frames are not cached too long
+[[headers]]
+  for = "/flames/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
