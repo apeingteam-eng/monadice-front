@@ -5,11 +5,12 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Use the official Next.js plugin (required for Next 15)
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Ensure flame frames are not cached too long
+# Prevent caching for flame PNG sequences
 [[headers]]
   for = "/flames/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
+    Cache-Control = "public, max-age=0, must-revalidate, no-cache, no-store"
