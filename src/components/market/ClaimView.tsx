@@ -15,6 +15,13 @@ type Ticket = {
   claimed: boolean;
 };
 
+type BackendBet = {
+  ticket_id: number;
+  claimed: boolean;
+  payout: number;
+  campaign_address: string;
+};
+
 type ClaimViewProps = {
   campaignAddress: `0x${string}`;
   endTime: number;        // unix seconds
@@ -28,7 +35,7 @@ export default function ClaimView({
   const { address } = useAccount();
 
 
-  const [backendBets, setBackendBets] = useState<any[]>([]);
+  const [backendBets, setBackendBets] = useState<BackendBet[]>([]);
 const [joined, setJoined] = useState<boolean>(false);
 const [claimedAmount, setClaimedAmount] = useState<number>(0);
   const { writeContractAsync } = useWriteContract();
@@ -59,7 +66,7 @@ const [claimedAmount, setClaimedAmount] = useState<number>(0);
 // ---- Load backend bets first ----
 const token = localStorage.getItem("access_token");
 
-let backend = [];
+let backend: BackendBet[] = [];
 try {
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`,
@@ -71,7 +78,7 @@ try {
   const data = await res.json();
 
   backend = data.bets.filter(
-    (b: any) =>
+    (b: BackendBet) =>
       b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
   );
 
@@ -79,9 +86,9 @@ try {
   setJoined(backend.length > 0);
 
   // --- calculate total claimed payout ---
-  const backendClaims = backend.filter((b: any) => b.claimed);
+  const backendClaims = backend.filter((b: BackendBet) => b.claimed);
  const totalClaimFromBackend = backendClaims.reduce(
-  (sum: number, b: any) => sum + (b.payout || 0),
+  (sum: number, b: BackendBet) => sum + (b.payout || 0),
   0
 );
   setClaimedAmount(totalClaimFromBackend);
@@ -377,7 +384,7 @@ console.log("🟪 RENDER FLAGS", {
     );
   }
 // ---- USER ALREADY CLAIMED (backend tells the truth) ----
-const backendClaims = backendBets.filter((b: any) => b.claimed);
+const backendClaims = backendBets.filter((b: BackendBet) => b.claimed);
 
 if (backendClaims.length > 0) {
   return (
@@ -395,7 +402,7 @@ if (backendClaims.length > 0) {
 
       <p className="text-neutral-400 text-xs mt-2">
         Tickets:{" "}
-        {backendClaims.map((b: any) => `#${b.ticket_id}`).join(", ")}
+        {backendClaims.map((b: BackendBet) => `#${b.ticket_id}`).join(", ")}
       </p>
     </div>
   );

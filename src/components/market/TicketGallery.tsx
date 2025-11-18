@@ -19,6 +19,15 @@ type GalleryTicket = {
   burned?: boolean; // <--- add this
 };
 
+type BackendBet = {
+  ticket_id: number;
+  campaign_address: string;
+  side: boolean;
+  stake: number;
+  claimed: boolean;
+  payout: number | null;
+};
+
 export default function TicketGallery({
   campaignAddress,
   endTime,
@@ -36,12 +45,6 @@ export default function TicketGallery({
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<number | null>(null);
 
-  const [trueAmt, setTrueAmt] = useState<number>(0);
-  const [falseAmt, setFalseAmt] = useState<number>(0);
-  const [potAmt, setPotAmt] = useState<number>(0);
-  const [feeBps, setFeeBps] = useState<number>(0);
-  const [outcomeTrue, setOutcomeTrue] = useState<boolean | null>(null);
-
   const now = Math.floor(Date.now() / 1000);
   const isRunning = marketState === 0 && endTime > now;
   const isPending = marketState === 0 && endTime <= now;
@@ -54,7 +57,7 @@ export default function TicketGallery({
 // --- 1) Fetch backend historic tickets for this campaign ---
 const token = localStorage.getItem("access_token");
 
-let backendTickets: any[] = [];
+let backendTickets: BackendBet[] = [];
 try {
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`,
@@ -67,7 +70,7 @@ try {
 
   const json = await res.json();
   backendTickets = json.bets.filter(
-    (b: any) =>
+    (b: BackendBet) =>
       b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
   );
 } catch (err) {
@@ -84,12 +87,6 @@ try {
       const tFalse = Number(await contract.totalFalse()) / 1e6;
       const tPot = Number(await contract.totalInitialPot()) / 1e6;
       const fBps = Number(await contract.feeBps());
-
-      setOutcomeTrue(outcome);
-      setTrueAmt(tTrue);
-      setFalseAmt(tFalse);
-      setPotAmt(tPot);
-      setFeeBps(fBps);
 
       const pool = tTrue + tFalse + tPot;
       const fee = (pool * fBps) / 10000;
@@ -149,8 +146,8 @@ const merged: GalleryTicket[] = [];
 for (const t of result) merged.push(t);
 
 // 2B — Add tickets that exist in backend but NOT on-chain (burned or old tickets)
-backendTickets.forEach((b: any) => {
-  const exists = result.some((t) => t.id === b.ticket_id);
+backendTickets.forEach((b: BackendBet) => {
+  const exists = result.some((t: GalleryTicket) => t.id === b.ticket_id);
   if (!exists) {
     merged.push({
       id: b.ticket_id,
@@ -161,7 +158,7 @@ backendTickets.forEach((b: any) => {
       pnl: b.payout !== null ? b.payout : -b.stake,
       imageUrl: "/monadice_burned.png",
       burned: true,
-    } as any);
+    });
   }
 });
 
