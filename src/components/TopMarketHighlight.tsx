@@ -223,7 +223,7 @@ const floatyStyle = (
 {/* 🔥 PNG frame-based flame */}
 <div className="absolute inset-0 pointer-events-none -z-10 flex justify-center items-center overflow-visible">
  <img
-  src={`/flames/prupleflame${String(frame).padStart(3, "0")}.png`}
+  src={`/flames/prupleflame${String(frame).padStart(3, "0")}.png?v=${frame}`}
   className="w-[600px] h-[500px] max-w-none object-contain opacity-90 translate-x-[10px] translate-y-[4px]"
   alt="flame"
 />
