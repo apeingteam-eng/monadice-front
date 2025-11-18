@@ -26,9 +26,12 @@ export default function ClaimView({
   endTime,
 }: ClaimViewProps) {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
 
-  
+
+  const [backendBets, setBackendBets] = useState<any[]>([]);
+const [joined, setJoined] = useState<boolean>(false);
+const [claimedAmount, setClaimedAmount] = useState<number>(0);
+  const { writeContractAsync } = useWriteContract();
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,7 @@ export default function ClaimView({
 
   /* --------------------------- Load All Data --------------------------- */
   useEffect(() => {
+    
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignAddress, address]);
@@ -52,7 +56,39 @@ export default function ClaimView({
 
     try {
       setLoading(true);
+// ---- Load backend bets first ----
+const token = localStorage.getItem("access_token");
 
+let backend = [];
+try {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    }
+  );
+
+  const data = await res.json();
+
+  backend = data.bets.filter(
+    (b: any) =>
+      b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
+  );
+
+  setBackendBets(backend);
+  setJoined(backend.length > 0);
+
+  // --- calculate total claimed payout ---
+  const backendClaims = backend.filter((b: any) => b.claimed);
+ const totalClaimFromBackend = backendClaims.reduce(
+  (sum: number, b: any) => sum + (b.payout || 0),
+  0
+);
+  setClaimedAmount(totalClaimFromBackend);
+
+} catch (err) {
+  console.error("Failed to load backend bets:", err);
+}
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
       const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
@@ -286,15 +322,15 @@ console.log("🟪 RENDER FLAGS", {
   isResolved,
 });
   /* ------------------------------ NO JOIN ------------------------------ */
-  if (tickets.length === 0) {
-    return (
-      <div className="border border-neutral-700 bg-neutral-900 p-4 rounded-lg">
-        <p className="text-neutral-400">
-          You did not join this prediction market.
-        </p>
-      </div>
-    );
-  }
+ if (!joined) {
+  return (
+    <div className="border border-neutral-700 bg-neutral-900 p-4 rounded-lg">
+      <p className="text-neutral-400">
+        You did not join this prediction market.
+      </p>
+    </div>
+  );
+}
 
   /* ------------------------------ RUNNING ------------------------------ */
   if (isRunning) {
@@ -340,7 +376,30 @@ console.log("🟪 RENDER FLAGS", {
       </div>
     );
   }
+// ---- USER ALREADY CLAIMED (backend tells the truth) ----
+const backendClaims = backendBets.filter((b: any) => b.claimed);
 
+if (backendClaims.length > 0) {
+  return (
+    <div className="border border-accentPurple/40 bg-accentPurple/10 p-4 rounded-lg">
+      <p className="text-accentPurple font-semibold text-lg">
+        You already claimed your winning bets.
+      </p>
+
+      <p className="text-neutral-300 text-sm mt-1">
+        Total claimed:{" "}
+        <span className="text-accentPurple font-bold">
+          ${claimedAmount.toFixed(2)}
+        </span>
+      </p>
+
+      <p className="text-neutral-400 text-xs mt-2">
+        Tickets:{" "}
+        {backendClaims.map((b: any) => `#${b.ticket_id}`).join(", ")}
+      </p>
+    </div>
+  );
+}
   /* ------------------------------ LOST ------------------------------ */
   if (winningTickets.length === 0) {
     return (

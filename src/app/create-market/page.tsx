@@ -19,7 +19,70 @@ const FACTORY_ADDRESS = CHAIN.addresses.FACTORY;
 const USDC_DECIMALS = 6;
 const REQUIRED_USDC = BigInt(1 * 10 ** USDC_DECIMALS);
 const TARGET_CHAIN_ID = CHAIN.chainId;
+/* ------------------------------------------------------------
+   CUSTOM DROPDOWN COMPONENT (Monadice Styled)
+------------------------------------------------------------ */
+function CustomDropdown({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
 
+  return (
+    <div className="relative">
+      {/* Selected box */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="
+          w-full px-3 py-2 rounded-md
+          bg-neutral-900/60 border border-neutral-700/50
+          text-neutral-200 text-left
+          focus:border-accentPurple focus:ring-1 focus:ring-accentPurple
+          outline-none transition
+          flex justify-between items-center
+        "
+      >
+        {value}
+        <span className="text-neutral-500">▼</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div
+          className="
+            absolute left-0 right-0 mt-2
+            bg-neutral-900/90 backdrop-blur-xl
+            border border-neutral-700/50
+            rounded-lg shadow-xl z-20
+          "
+        >
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className="
+                px-3 py-2 cursor-pointer
+                text-neutral-200
+                hover:bg-accentPurple/20 transition
+              "
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function CreateMarketPage() {
   const toast = useToast();
   const { address } = useAccount();
@@ -34,7 +97,7 @@ export default function CreateMarketPage() {
   const [allowanceEnough, setAllowanceEnough] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-
+  const [buttonStage, setButtonStage] = useState<"verify" | "approve" | "create">("verify");
   const minSelectableDate = addMinutes(new Date(), 10);
 
   /* --------------------------------- SIGNER -------------------------------- */
@@ -98,6 +161,7 @@ export default function CreateMarketPage() {
 
       toast.success("Draft verified! ✔");
       setVerified(true);
+      setButtonStage("approve");
     } catch {
       toast.error("Verification failed.");
     } finally {
@@ -124,6 +188,7 @@ export default function CreateMarketPage() {
 
       toast.success("USDC approved!");
       setAllowanceEnough(true);
+      setButtonStage("create");
     } catch {
       toast.error("Approval failed.");
     } finally {
@@ -159,93 +224,150 @@ export default function CreateMarketPage() {
     } finally {
       setLoading(false);
     }
-  };
+  };/* --------------------------------- UI ----------------------------------- */
+return (
+  <div className="relative min-h-screen w-full overflow-hidden text-white">
+    {/* Background video */}
+    <video
+      autoPlay
+      loop
+      muted
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover z-0"
+    >
+      <source src="/monadice_coin_create.mp4" type="video/mp4" />
+    </video>
 
-  /* --------------------------------- UI ----------------------------------- */
-  return (
-    <div className="min-h-screen bg-neutral-950 text-white py-12 px-4">
-      <div className="container mx-auto max-w-2xl space-y-8">
-        <h1 className="text-3xl font-bold text-center bg-gradient-to-r from-accentPurple to-[#7a4edb] bg-clip-text text-transparent">
+    {/* Black overlay */}
+    <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] z-0"></div>
+
+    {/* Main content */}
+    <div className="relative z-10 py-12 px-4">
+      <div className="container mx-auto max-w-xl space-y-8">
+
+        {/* Title */}
+        <h1 className="text-4xl font-bold text-center 
+            bg-gradient-to-r from-accentPurple to-[#7a4edb]
+            bg-clip-text text-transparent
+            drop-shadow-[0_0_12px_rgba(155,93,229,0.6)]
+        ">
           Create a New Market
         </h1>
 
-        <div className="space-y-6 p-6 bg-neutral-900/60 border border-neutral-800 rounded-2xl">
-          {/* Title */}
-          <div>
+        {/* Card */}
+        <div className="space-y-6 p-7 rounded-2xl 
+            border border-white/10 
+            bg-white/5 backdrop-blur-xl 
+            shadow-[0_0_25px_rgba(0,0,0,0.4)]
+            ">
+          
+          {/* Market Title */}
+          <div className="space-y-1">
             <label className="text-sm text-neutral-300">Market Title</label>
             <input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full mt-1 px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-md"
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setVerified(null);
+                setButtonStage("verify");
+              }}
+              placeholder="e.g. BTC above 100K?"
+              className="
+                w-full px-3 py-2
+                rounded-md 
+                bg-neutral-900/60 
+                border border-neutral-700/50
+                focus:border-accentPurple
+                focus:ring-1 focus:ring-accentPurple
+                outline-none transition
+              "
             />
           </div>
 
-          {/* Category */}
-          <div>
-            <label className="text-sm text-neutral-300">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full mt-1 px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-md"
-            >
-              {["CRYPTO", "SPORTS", "POLITICS", "SOCIAL"].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+         {/* Category */}
+<div className="space-y-1">
+  <label className="text-sm text-neutral-300">Category</label>
 
-          {/* Date Picker */}
-          <div>
-            <label className="text-sm text-neutral-300 mb-1">End Date & Time</label>
-            <ReactDatePicker
+  <CustomDropdown
+    value={category}
+    onChange={(v) => {
+      setCategory(v);
+      setVerified(null);
+      setButtonStage("verify");
+    }}
+    options={["CRYPTO", "SPORTS", "POLITICS", "SOCIAL"]}
+  />
+</div>
+{/* End Date */}
+<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <label className="text-sm text-neutral-300 whitespace-nowrap sm:w-40">
+    End Date & Time
+  </label>
+
+  <ReactDatePicker
     selected={selectedDate}
-    onChange={setSelectedDate}
+    onChange={(d) => {
+      setSelectedDate(d);
+      setVerified(null);
+      setButtonStage("verify");
+    }}
     showTimeSelect
     timeIntervals={5}
     dateFormat="dd.MM.yyyy HH:mm"
     minDate={minSelectableDate}
     minTime={
-        selectedDate &&
-        selectedDate.toDateString() === minSelectableDate.toDateString()
-            ? minSelectableDate
-            : new Date(selectedDate?.setHours(0, 0, 0, 0) || 0)
+      selectedDate &&
+      selectedDate.toDateString() === minSelectableDate.toDateString()
+        ? minSelectableDate
+        : new Date(selectedDate?.setHours(0, 0, 0, 0) || 0)
     }
-maxTime={new Date(new Date().setHours(23, 59, 59, 999))}    className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2"
-/>
-          </div>
+    maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
+    className="
+      w-full px-3 py-2
+      rounded-md
+      bg-neutral-900/60 
+      border border-neutral-700/50
+      focus:border-accentPurple
+      focus:ring-1 focus:ring-accentPurple
+      outline-none transition
+    "
+    calendarClassName="!bg-neutral-900 !text-white !border-neutral-700"
+  />
+</div>
 
-          {/* Button 1 — VERIFY */}
           <button
-            onClick={handleVerify}
+            onClick={() => {
+              if (buttonStage === "verify") return handleVerify();
+              if (buttonStage === "approve") return handleApprove();
+              if (buttonStage === "create") return handleCreateMarket();
+            }}
             disabled={loading}
-            className="w-full py-2 bg-blue-600 rounded-md disabled:opacity-40"
+            className="
+              relative w-full py-3 mt-4 rounded-xl font-semibold
+              bg-gradient-to-r from-[#A46CFF] via-accentPurple to-[#8A5DFF]
+              text-white overflow-hidden transition-all
+              shadow-[0_0_25px_rgba(155,93,229,0.45)]
+              hover:shadow-[0_0_40px_rgba(155,93,229,0.8)]
+              hover:scale-[1.01] active:scale-[0.98]
+              disabled:opacity-40 disabled:cursor-not-allowed
+            "
           >
-            {loading ? "Verifying…" : "Verify Market"}
+            {loading
+              ? buttonStage === "verify"
+                ? "Verifying…"
+                : buttonStage === "approve"
+                ? "Approving…"
+                : "Creating…"
+              : buttonStage === "verify"
+              ? "Verify Market"
+              : buttonStage === "approve"
+              ? "Approve 1 USDC"
+              : "Create Market"}
           </button>
 
-          {/* Button 2 — APPROVE */}
-          {verified && !allowanceEnough && (
-            <button
-              onClick={handleApprove}
-              disabled={loading}
-              className="w-full py-2 bg-purple-600 rounded-md disabled:opacity-40"
-            >
-              {loading ? "Approving…" : "Approve 1 USDC"}
-            </button>
-          )}
-
-          {/* Button 3 — CREATE */}
-          {verified && allowanceEnough && (
-            <button
-              onClick={handleCreateMarket}
-              disabled={loading}
-              className="w-full py-2 bg-accentPurple rounded-md disabled:opacity-40"
-            >
-              {loading ? "Creating…" : "Create Market"}
-            </button>
-          )}
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

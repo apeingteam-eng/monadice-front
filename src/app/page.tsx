@@ -67,7 +67,7 @@ export default function Home() {
   /* --------------------------------- UI ---------------------------------- */
   return (
     <>
-      <Hero />
+      <Hero markets={markets} />
       <div className="container mx-auto p-6">
         <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>

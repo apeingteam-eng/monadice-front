@@ -116,3 +116,111 @@
   animation: slideIn 0.25s ease-out;
 }
 /* nothing else needed */
+
+/* ----------------------------------------------------------- */
+/* 6) Purple flame / heat aura behind cards                    */
+/* ----------------------------------------------------------- */
+
+@keyframes purpleFlames {
+  0% {
+    opacity: 0.35;
+    transform: translateY(0px) scale(1);
+    filter: blur(22px);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateY(-8px) scale(1.05);
+    filter: blur(28px);
+  }
+  100% {
+    opacity: 0.35;
+    transform: translateY(0px) scale(1);
+    filter: blur(22px);
+  }
+}
+
+.purple-flame-bg {
+  position: relative;
+  overflow: visible; /* let flames escape */
+  z-index: 0;
+}
+
+.purple-flame-bg::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 140%;
+  height: 140%;
+  pointer-events: none;
+  z-index: -2;
+  background: radial-gradient(
+    circle at 50% 70%,
+    rgba(155, 93, 229, 0.35),
+    rgba(80, 0, 180, 0.15),
+    rgba(0, 0, 0, 0)
+  );
+  animation: purpleFlames 4s ease-in-out infinite;
+}/* ========================= */
+/* 🔥 Purple Flame Animation */
+/* ========================= */
+
+@keyframes purpleFlameRise {
+  0% {
+    transform: translateY(10px) scale(1);
+    opacity: 0.45;
+    filter: blur(18px);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.08);
+    opacity: 0.85;
+    filter: blur(25px);
+  }
+  100% {
+    transform: translateY(10px) scale(1);
+    opacity: 0.45;
+    filter: blur(18px);
+  }
+}
+
+.purple-real-flames {
+  position: absolute;
+  bottom: -35px;
+  left: -25%;
+  transform: translateX(-50%);
+  width: 130%;
+  height: 140px;
+  background: radial-gradient(
+    circle at center,
+    rgba(155, 93, 229, 0.55),
+    rgba(120, 0, 200, 0.30),
+    rgba(0, 0, 0, 0)
+  );
+  animation: purpleFlameRise 2.5s infinite ease-in-out;
+  pointer-events: none;
+  z-index: -1; /* behind card but visible now */
+}
+/* Intensify on hover */
+
+/* =============================== */
+/* 🔥 Hide flames on hover         */
+/* =============================== */
+
+.card-with-purple-flame:hover .purple-real-flames {
+  opacity: 0;
+  filter: blur(40px);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.flame-glow {
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 25px rgba(155, 93, 229, 0.9))
+          drop-shadow(0 0 55px rgba(155, 93, 229, 0.6));
+  animation: flamePulse 2s infinite ease-in-out;
+}
+
+@keyframes flamePulse {
+  0% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 0.75; transform: scale(1); }
+}

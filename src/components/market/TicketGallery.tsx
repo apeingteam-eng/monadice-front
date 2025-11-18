@@ -16,6 +16,7 @@ type GalleryTicket = {
   won: boolean;
   pnl: number;
   imageUrl: string;
+  burned?: boolean; // <--- add this
 };
 
 export default function TicketGallery({
@@ -50,7 +51,28 @@ export default function TicketGallery({
   const load = useCallback(async () => {
     if (!address) return;
     setLoading(true);
+// --- 1) Fetch backend historic tickets for this campaign ---
+const token = localStorage.getItem("access_token");
 
+let backendTickets: any[] = [];
+try {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const json = await res.json();
+  backendTickets = json.bets.filter(
+    (b: any) =>
+      b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
+  );
+} catch (err) {
+  console.error("Failed to load backend tickets:", err);
+}
     try {
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
       const contract = new Contract(campaignAddress, BetCampaignABI, provider);
@@ -107,19 +129,44 @@ export default function TicketGallery({
     }
 
     result.push({
-      id: i,
-      side,
-      stake,
-      claimed: t.claimed,
-      won,
-      pnl,
-      imageUrl: i <= 6 ? `/monadice${i}.png` : `/monadice6.png`,
-    });
+  id: i,
+  side,
+  stake,
+  claimed: t.claimed,
+  won,
+  pnl,
+  imageUrl: t.claimed ? "/monadice_burned.png" : (i <= 6 ? `/monadice${i}.png` : `/monadice6.png`),
+  burned: t.claimed,   // 🔥 mark claimed tickets as burned
+});
   } catch {
     /* ignore missing tickets */
   }
 }
-      setTickets(result);
+     // --- 2) Merge on-chain + backend (to include burned/claimed historic tickets) ---
+const merged: GalleryTicket[] = [];
+
+// 2A — Add on-chain tickets normally
+for (const t of result) merged.push(t);
+
+// 2B — Add tickets that exist in backend but NOT on-chain (burned or old tickets)
+backendTickets.forEach((b: any) => {
+  const exists = result.some((t) => t.id === b.ticket_id);
+  if (!exists) {
+    merged.push({
+      id: b.ticket_id,
+      side: b.side ? 0 : 1, // backend side = boolean
+      stake: b.stake,
+      claimed: b.claimed,
+      won: b.payout !== null && b.payout > 0,
+      pnl: b.payout !== null ? b.payout : -b.stake,
+      imageUrl: "/monadice_burned.png",
+      burned: true,
+    } as any);
+  }
+});
+
+// Final list
+setTickets(merged);
     } finally {
       setLoading(false);
     }
@@ -234,13 +281,15 @@ export default function TicketGallery({
             key={t.id}
             className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 hover:border-accentPurple/40 transition"
           >
-            <Image
-              src={t.imageUrl}
-              width={400}
-              height={400}
-              alt="ticket image"
-              className="w-full h-64 object-cover rounded-lg mb-3"
-            />
+           <Image
+  src={t.imageUrl}
+  width={400}
+  height={400}
+  alt="ticket image"
+  className={`w-full h-64 object-cover rounded-lg mb-3 ${
+    t.burned ? "opacity-40 grayscale" : ""
+  }`}
+/>
 
             {/* ID + SIDE + STATUS */}
             <div className="flex justify-between items-center mb-2">
@@ -303,7 +352,7 @@ export default function TicketGallery({
                 </span>
               </p>
 
-              {isResolved && t.won && !t.claimed && (
+          {isResolved && t.won && !t.claimed && !t.burned && (
                 <button
                   onClick={() => claimTicket(t.id)}
                   disabled={claimingId === t.id}
