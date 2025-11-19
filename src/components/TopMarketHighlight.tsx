@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { Contract, JsonRpcProvider } from "ethers";
-import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
 import { CHAIN } from "@/config/network";
 import type { MarketSummary } from "@/components/MarketCard";
 import TopMarketSkeleton from "./TopMarketSkeleton";
@@ -30,6 +28,12 @@ function formatCountdown(endUnix: number): string {
   return `Ends in ${hours}h ${minutes}m`;
 }
 
+type SafeMarket = MarketSummary & {
+  volume?: number;
+  percent_true?: number;
+  percent_false?: number;
+};
+
 /* ---------- Component ---------- */
 
 export default function TopMarketHighlight({ markets }: { markets: MarketSummary[] }) {
@@ -39,85 +43,49 @@ export default function TopMarketHighlight({ markets }: { markets: MarketSummary
   const [noPercent, setNoPercent] = useState(50);
 
   const cardRef = useRef<HTMLDivElement>(null);
-const [frame, setFrame] = useState(0);
 
-useEffect(() => {
-  const total = 145; // number of frames
-  let f = 0;
-
-  const interval = setInterval(() => {
-    f = (f + 1) % total;
-    setFrame(f);
-  }, 33); // 30 fps
-
-  return () => clearInterval(interval);
-}, []);
   /* ------------------------------------------
-       Load top market based on volume
+       Load top market based on volume and running status
   ------------------------------------------ */
-  useEffect(() => {
-    if (!markets.length) return;
+ useEffect(() => {
+  if (!markets.length) return;
 
-    async function getTop() {
-      const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+  function getTop() {
+    const running = markets.filter(m => m.state === "open");
 
-      let best: MarketSummary | null = null;
-      let bestVol = -1;
+    let best =
+      (running.length > 0
+        ? running
+        : markets
+      ).sort((a: any, b: any) => (b.volume ?? 0) - (a.volume ?? 0))[0];
 
-      for (const m of markets) {
-        try {
-          const contract = new Contract(m.campaign_address, BetCampaignABI, provider);
-          const div = 1e6;
+    if (!best) return;
 
-          const tTrue = Number(await contract.totalTrue().catch(() => 0n)) / div;
-          const tFalse = Number(await contract.totalFalse().catch(() => 0n)) / div;
-          const tPot = Number(await contract.totalInitialPot().catch(() => 0n)) / div;
+    setTop(best);
 
-          const vol = tTrue + tFalse + tPot;
-          if (vol > bestVol) {
-            bestVol = vol;
-            best = m;
-          }
-        } catch (_) {}
-      }
+    // 🔥 Fetch full details for real volume + yes/no
+    async function loadDetails() {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/factory/campaign/${best.id}`
+        );
+        if (!res.ok) return;
 
-      if (best) {
-        setTop(best);
-        setVolume(bestVol);
+        const full = await res.json();
+
+        setVolume(full.volume ?? 0);
+        setYesPercent(Math.round(full.percent_true ?? 50));
+        setNoPercent(Math.round(full.percent_false ?? 50));
+      } catch (err) {
+        console.error("Top market detail fetch failed", err);
       }
     }
 
-    getTop();
-  }, [markets]);
-
-  /* ------------------------------------------
-        Load YES / NO %
-  ------------------------------------------ */
- useEffect(() => {
-  if (!top) return;
-
-  const m = top; // ← local copy eliminates the null error
-
-  async function loadPercents() {
-    try {
-      const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-      const contract = new Contract(m.campaign_address, BetCampaignABI, provider);
-
-      const div = 1e6;
-      const tTrue = Number(await contract.totalTrue().catch(() => 0n)) / div;
-      const tFalse = Number(await contract.totalFalse().catch(() => 0n)) / div;
-
-      const total = tTrue + tFalse;
-
-      setYesPercent(total > 0 ? Math.round((tTrue / total) * 100) : 50);
-      setNoPercent(total > 0 ? Math.round((tFalse / total) * 100) : 50);
-    } catch {}
+    loadDetails();
   }
 
-  loadPercents();
-}, [top]);
- 
-
+  getTop();
+}, [markets]);
 /* ------------------------------------------
       PREMIUM INERTIA-BASED 3D TILT
 ------------------------------------------ */
@@ -186,12 +154,13 @@ const floatyStyle = (
     {`
       @keyframes floaty {
         0% { transform: translateY(0px); }
-        50% { transform: translateY(-4px); }
+        50% { transform: translateY(-15px); }
         100% { transform: translateY(0px); }
       }
     `}
   </style>
-);return (
+);
+return (
   <>
     {floatyStyle}
 
@@ -220,14 +189,26 @@ const floatyStyle = (
     hover:border-accentPurple/40
   "
 >
-{/* 🔥 PNG frame-based flame */}
+{/* 🔥 WebM flame animation */}
 <div className="absolute inset-0 pointer-events-none -z-10 flex justify-center items-center overflow-visible">
- <img
-  src={`/flames/prupleflame${String(frame).padStart(3, "0")}.png?v=${frame}`}
-  className="w-[600px] h-[500px] max-w-none object-contain opacity-90 translate-x-[10px] translate-y-[4px]"
-  alt="flame"
-/>
-</div> 
+  <video
+    src="/flames/flame_alpha.webm"
+    autoPlay
+    loop
+    muted
+    playsInline
+    className="
+      w-[600px]
+      h-[500px]
+      object-contain
+      opacity-90
+      translate-x-[10px]
+      translate-y-[4px]
+      max-w-none
+      pointer-events-none
+    "
+  />
+</div>
 
  {/* 🔥 Flame directly under card */}
     <div className="purple-real-flames absolute left-0 right-0 -bottom-10 mx-auto"></div>

@@ -2,22 +2,32 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Contract, JsonRpcProvider } from "ethers";
-import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
-import { CHAIN } from "@/config/network"; // <-- uses your network.ts
 
 export type MarketSummary = {
   id: number;
   name: string;
   symbol: string;
   end_time: number;
-  fee_bps: number;
   state: string;
+  fee_bps: number;
   campaign_address: string;
 };
 
-// ---- Format numbers like $1.3k, $950k, $1.9m ----
+/* Backend stats shape */
+type CampaignStats = {
+  totalTrue: number;
+  totalFalse: number;
+  totalInitialPot: number;
+  volume: number;
+  yes_odds: number;
+  no_odds: number;
+  percent_true: number;
+  percent_false: number;
+};
+
+/* Format $ numbers */
 function formatUsdShort(n: number) {
+  if (!n || isNaN(n)) return "$0";
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}b`;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}m`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}k`;
@@ -39,41 +49,32 @@ type Props = {
 };
 
 export default function MarketCard({ market }: Props) {
-  const [yesPercent, setYesPercent] = useState(50);
-  const [noPercent, setNoPercent] = useState(50);
-  const [volume, setVolume] = useState(0);
+  const [stats, setStats] = useState<CampaignStats>({
+    totalTrue: 0,
+    totalFalse: 0,
+    totalInitialPot: 0,
+    volume: 0,
+    yes_odds: 1,
+    no_odds: 1,
+    percent_true: 50,
+    percent_false: 50,
+  });
 
   useEffect(() => {
-  async function loadOnchainData() {
-  try {
-    const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-    const contract = new Contract(market.campaign_address, BetCampaignABI, provider);
-
-    const divisor = 1e6; // USDC decimals
-
-    const tTrueRaw  = await contract.totalTrue().catch(() => 0n);
-    const tFalseRaw = await contract.totalFalse().catch(() => 0n);
-    const tPotRaw   = await contract.totalInitialPot().catch(() => 0n);
-
-    const trueNum  = Number(tTrueRaw)  / divisor;
-    const falseNum = Number(tFalseRaw) / divisor;
-    const potNum   = Number(tPotRaw)   / divisor;
-
-    const totalVotes = trueNum + falseNum;
-    const yesPct = totalVotes > 0 ? Math.round((trueNum / totalVotes) * 100) : 50;
-    const noPct  = totalVotes > 0 ? Math.round((falseNum / totalVotes) * 100) : 50;
-
-    setYesPercent(yesPct);
-    setNoPercent(noPct);
-    setVolume(trueNum + falseNum + potNum);
-
-  } catch (err) {
-    console.log("Skipping undeployed or corrupted pool:", err);
-  }
-}
-
-    loadOnchainData();
-  }, [market.campaign_address]);
+    async function loadStats() {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/factory/campaign/${market.id}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setStats(data);
+      } catch (e) {
+        console.error("Failed to load campaign stats", e);
+      }
+    }
+    loadStats();
+  }, [market.id]);
 
   // ---- Status label ----
   const now = Math.floor(Date.now() / 1000);
@@ -101,17 +102,13 @@ export default function MarketCard({ market }: Props) {
     >
       {/* Status */}
       <div className="absolute top-3 right-3 flex items-center gap-1">
-        <span
-          className={`inline-block w-2 h-2 rounded-full animate-pulse ${dotColor}`}
-        ></span>
-        <span className={`text-xs font-medium ${statusColor}`}>
-          {statusLabel}
-        </span>
+        <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${dotColor}`} />
+        <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
       </div>
 
       {/* Volume */}
       <div className="mb-3 text-sm text-neutral-500">
-        {formatUsdShort(volume)} Vol.
+        {formatUsdShort(stats.volume)} Vol.
       </div>
 
       {/* Symbol */}
@@ -132,37 +129,19 @@ export default function MarketCard({ market }: Props) {
       </p>
 
       {/* YES / NO */}
-<div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">
 
-  {/* YES */}
-  <div
-    className="
-      flex items-center justify-between rounded-md border px-3 py-2 text-sm 
-      border border-neutral-700
-      bg-neutral-950
-      hover:bg-green-900/20
-      transition-colors
-    "
-  >
-    <span className="white-300">Yes</span>
-    <span className="font-medium white-300">{yesPercent}%</span>
-  </div>
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700">
+          <span className="white-300">Yes</span>
+          <span className="font-medium white-300">{stats.percent_true}%</span>
+        </div>
 
-  {/* NO */}
-  <div
-    className="
-    border border-neutral-700
-      flex items-center justify-between rounded-md border px-3 py-2 text-sm 
-      bg-neutral-950
-      hover:bg-red-900/20
-      transition-colors
-    "
-  >
-    <span className="white-300">No</span>
-    <span className="font-medium white-300">{noPercent}%</span>
-  </div>
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700">
+          <span className="white-300">No</span>
+          <span className="font-medium white-300">{stats.percent_false}%</span>
+        </div>
 
-</div>
+      </div>
     </Link>
   );
 }

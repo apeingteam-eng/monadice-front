@@ -26,6 +26,18 @@ type Campaign = {
   creation_stake: number;
   tx_hash: string;
   deployed_at: string;
+
+  // Backend-calculated stats (NEW)
+  totalTrue: number;
+  totalFalse: number;
+  totalInitialPot: number;
+  volume: number;
+
+  yes_odds: number;
+  no_odds: number;
+
+  percent_true: number;
+  percent_false: number;
 };
 
 function formatCountdown(endUnix: number): string {
@@ -96,58 +108,27 @@ export default function MarketPage() {
     loadCampaign();
   }, [marketId, toast]);
 
-  /* -------------------------------------------------------------------------- */
-  /*                       2. Load on-chain stats from contract                 */
-  /* -------------------------------------------------------------------------- */
 
-  useEffect(() => {
-    if (!campaign) return;
+  /* Use backend-calculated values directly */
+useEffect(() => {
+  if (!campaign) return;
 
-    const c = campaign; // alias to satisfy TS
+  // backend returns these already calculated:
+  // percent_true, percent_false, totalTrue, totalFalse, totalInitialPot,
+  // volume, yes_odds, no_odds
 
-    async function loadStats() {
-      try {
-        const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-        const contract = new Contract(c.campaign_address, BetCampaignABI, provider);
+  setYesPercent(campaign.percent_true);
+  setNoPercent(campaign.percent_false);
 
-        const [tTrue, tFalse, tPot] = await Promise.all([
-          contract.totalTrue(),
-          contract.totalFalse(),
-          contract.totalInitialPot(),
-        ]);
+  setTrueAmt(campaign.totalTrue);
+  setFalseAmt(campaign.totalFalse);
+  setPotAmt(campaign.totalInitialPot);
 
-        const trueUsd = Number(tTrue) / 1e6;
-        const falseUsd = Number(tFalse) / 1e6;
-        const potUsd = Number(tPot) / 1e6;
+  setVolume(campaign.volume);
 
-        setTrueAmt(trueUsd);
-        setFalseAmt(falseUsd);
-        setPotAmt(potUsd);
-
-        const totalSide = trueUsd + falseUsd;
-        const pool = trueUsd + falseUsd + potUsd;
-
-        if (totalSide > 0) {
-          setYesPercent(Math.round((trueUsd / totalSide) * 100));
-          setNoPercent(Math.round((falseUsd / totalSide) * 100));
-        }
-
-        setVolume(pool);
-
-        const feeMultiplier = 1 - c.fee_bps / 10000;
-        const distributablePool = pool * feeMultiplier;
-
-        if (trueUsd > 0) setOddsYes((distributablePool / trueUsd).toFixed(2));
-        if (falseUsd > 0) setOddsNo((distributablePool / falseUsd).toFixed(2));
-      } catch (err) {
-        console.error("Failed to load stats:", err);
-        toast.error("Failed to load on-chain stats.");
-      }
-    }
-
-    loadStats();
-  }, [campaign, toast]);
-
+  setOddsYes(campaign.yes_odds.toFixed(2));
+  setOddsNo(campaign.no_odds.toFixed(2));
+}, [campaign]);
   /* -------------------------------------------------------------------------- */
   /*                                  Rendering                                 */
   /* -------------------------------------------------------------------------- */
