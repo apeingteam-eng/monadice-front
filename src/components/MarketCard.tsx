@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 export type MarketSummary = {
   id: number;
@@ -9,12 +8,11 @@ export type MarketSummary = {
   symbol: string;
   end_time: number;
   state: string;
+  resolved: boolean;
   fee_bps: number;
   campaign_address: string;
-};
 
-/* Backend stats shape */
-type CampaignStats = {
+  // Stats from API
   totalTrue: number;
   totalFalse: number;
   totalInitialPot: number;
@@ -25,7 +23,6 @@ type CampaignStats = {
   percent_false: number;
 };
 
-/* Format $ numbers */
 function formatUsdShort(n: number) {
   if (!n || isNaN(n)) return "$0";
   if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}b`;
@@ -44,52 +41,20 @@ function formatCountdown(endUnix: number): string {
   return `Ends in ${hours}h ${minutes}m`;
 }
 
-type Props = {
-  market: MarketSummary;
-};
-
-export default function MarketCard({ market }: Props) {
-  const [stats, setStats] = useState<CampaignStats>({
-    totalTrue: 0,
-    totalFalse: 0,
-    totalInitialPot: 0,
-    volume: 0,
-    yes_odds: 1,
-    no_odds: 1,
-    percent_true: 50,
-    percent_false: 50,
-  });
-
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/factory/campaign/${market.id}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        setStats(data);
-      } catch (e) {
-        console.error("Failed to load campaign stats", e);
-      }
-    }
-    loadStats();
-  }, [market.id]);
-
-  // ---- Status label ----
+export default function MarketCard({ market }: { market: MarketSummary }) {
   const now = Math.floor(Date.now() / 1000);
   const isEnded = market.end_time <= now;
-  const isOpen = market.state === "open";
 
+  // ---- Status logic ----
   let statusLabel = "Ended";
   let statusColor = "text-red-400";
   let dotColor = "bg-red-500";
 
-  if (isOpen && !isEnded) {
+  if (market.state === "open" && !market.resolved && !isEnded) {
     statusLabel = "Running";
     statusColor = "text-green-400";
     dotColor = "bg-green-500";
-  } else if (isOpen && isEnded) {
+  } else if (market.state === "open" && market.resolved) {
     statusLabel = "Pending";
     statusColor = "text-yellow-400";
     dotColor = "bg-yellow-400";
@@ -108,7 +73,7 @@ export default function MarketCard({ market }: Props) {
 
       {/* Volume */}
       <div className="mb-3 text-sm text-neutral-500">
-        {formatUsdShort(stats.volume)} Vol.
+        {formatUsdShort(market.volume)} Vol.
       </div>
 
       {/* Symbol */}
@@ -130,17 +95,15 @@ export default function MarketCard({ market }: Props) {
 
       {/* YES / NO */}
       <div className="grid grid-cols-2 gap-2">
-
-        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700">
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700 hover:bg-green-300/20 transition-colors duration-300">
           <span className="white-300">Yes</span>
-          <span className="font-medium white-300">{stats.percent_true}%</span>
+          <span className="font-medium white-300">{market.percent_true}%</span>
         </div>
 
-        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700">
+        <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm bg-neutral-950 border-neutral-700 hover:bg-red-300/20 transition-colors duration-300">
           <span className="white-300">No</span>
-          <span className="font-medium white-300">{stats.percent_false}%</span>
+          <span className="font-medium white-300">{market.percent_false}%</span>
         </div>
-
       </div>
     </Link>
   );

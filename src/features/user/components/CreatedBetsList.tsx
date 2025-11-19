@@ -2,9 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Contract, JsonRpcProvider } from "ethers";
-import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
-import { CHAIN } from "@/config/network";
 
 type OnchainStats = {
   yesPercent: number;
@@ -57,45 +54,45 @@ export default function CreatedBetsList({ campaigns }: Props) {
   const [activeFilter, setActiveFilter] = useState<"All" | "Running" | "Pending" | "Ended" | "Cancelled">("All");
   const [categoryFilter, setCategoryFilter] = useState<"All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL">("All");
 
-  const [onchain, setOnchain] = useState<Record<string, {
+  const [marketStats, setMarketStats] = useState<Record<number, {
     yesPercent: number;
     noPercent: number;
     volume: number;
     fees: number;
   }>>({});
 
-  /* On-chain loading */
   useEffect(() => {
     async function load() {
-      const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-      
-      const results: Record<string, OnchainStats> = {};
+      const results: Record<number, {
+        yesPercent: number;
+        noPercent: number;
+        volume: number;
+        fees: number;
+      }> = {};
 
       for (const c of campaigns) {
         try {
-          const contract = new Contract(c.campaign_address, BetCampaignABI, provider);
-          const divisor = 1e6;
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/campaign/${c.id}`);
+          if (!res.ok) continue;
 
-          const tTrueRaw = await contract.totalTrue().catch(() => 0n);
-          const tFalseRaw = await contract.totalFalse().catch(() => 0n);
-          const tPotRaw = await contract.totalInitialPot().catch(() => 0n);
+          const data = await res.json();
 
-          const yes = Number(tTrueRaw) / divisor;
-          const no = Number(tFalseRaw) / divisor;
-          const pot = Number(tPotRaw) / divisor;
+          const yesPct = data.percent_true ?? 50;
+          const noPct = data.percent_false ?? 50;
+          const volume = data.volume ?? 0;
 
-          const total = yes + no;
-          const yesPct = total > 0 ? Math.round((yes / total) * 100) : 50;
-          const noPct = total > 0 ? Math.round((no / total) * 100) : 50;
+          const fees = (volume * c.fee_bps) / 10000;
 
-          const totalVol = yes + no + pot;
-          const fees = (totalVol * c.fee_bps) / 10_000;
-
-          results[c.campaign_address] = { yesPercent: yesPct, noPercent: noPct, volume: totalVol, fees };
+          results[c.id] = {
+            yesPercent: yesPct,
+            noPercent: noPct,
+            volume,
+            fees,
+          };
         } catch {}
       }
 
-      setOnchain(results);
+      setMarketStats(results);
     }
 
     load();
@@ -179,7 +176,7 @@ export default function CreatedBetsList({ campaigns }: Props) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((c) => {
-            const stats: OnchainStats | undefined = onchain[c.campaign_address];
+            const stats = marketStats[c.id];
 
             return (
               <div

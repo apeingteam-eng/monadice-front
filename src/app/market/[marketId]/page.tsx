@@ -38,6 +38,8 @@ type Campaign = {
 
   percent_true: number;
   percent_false: number;
+
+  resolved: boolean;
 };
 
 function formatCountdown(endUnix: number): string {
@@ -151,22 +153,20 @@ useEffect(() => {
 
   /* ------------------------- Market state display --------------------------- */
 
-  const now = Math.floor(Date.now() / 1000);
-  const isEnded = campaign.end_time <= now;
-  const isOpen = campaign.state === "open";
-  const isPending = isOpen && isEnded;
-const isRunning = isOpen && !isEnded;
-const isFinished = !isOpen; // resolved or cancelled
-const bettingClosed = isPending || isFinished;
+  const isRunning = campaign.state === "open" && campaign.resolved === false;
+  const isPending = campaign.state === "open" && campaign.resolved === true;
+  const isEnded = campaign.state === "resolved";
+  const bettingClosed = isPending || isEnded;
+
   let statusLabel = "Ended";
   let pillColor = "bg-red-500/15 text-red-400";
   let dotColor = "bg-red-400";
 
-  if (isOpen && !isEnded) {
+  if (isRunning) {
     statusLabel = "Running";
     pillColor = "bg-green-500/15 text-green-400";
     dotColor = "bg-green-400";
-  } else if (isOpen && isEnded) {
+  } else if (isPending) {
     statusLabel = "Pending";
     pillColor = "bg-yellow-400/15 text-yellow-400";
     dotColor = "bg-yellow-400";
@@ -205,11 +205,11 @@ const bettingClosed = isPending || isFinished;
             <span className="text-xs text-neutral-500">{countdown}</span>
 
             <span
-              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${pillColor}`}
-            >
-              <span className={`inline-block w-2 h-2 rounded-full ${dotColor}`} />
-              {statusLabel}
-            </span>
+  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${pillColor}`}
+>
+  <span className={`inline-block w-2 h-2 rounded-full animate-pulse ${dotColor}`} />
+  {statusLabel}
+</span>
           </div>
 
           <h1 className="text-2xl font-semibold">{campaign.name}</h1>

@@ -27,20 +27,7 @@ useEffect(() => {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/campaigns`);
       const data = await res.json();
 
-      // Normalize for MarketCard
-      const normalized = data.map((c: any) => ({
-        ...c,
-        totalTrue: 0,
-        totalFalse: 0,
-        totalInitialPot: 0,
-        volume: 0,
-        yes_odds: 1,
-        no_odds: 1,
-        percent_true: 50,
-        percent_false: 50,
-      }));
-
-      setMarkets(normalized);
+      setMarkets(data); // ← direct use
     } catch (err) {
       console.error("Failed to load campaigns:", err);
     } finally {
@@ -49,6 +36,7 @@ useEffect(() => {
   }
   loadMarkets();
 }, []);
+
   const filtered = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
 
