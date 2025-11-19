@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { CHAIN } from "@/config/network";
+
 import type { MarketSummary } from "@/components/MarketCard";
 import TopMarketSkeleton from "./TopMarketSkeleton";
 
@@ -28,12 +28,6 @@ function formatCountdown(endUnix: number): string {
   return `Ends in ${hours}h ${minutes}m`;
 }
 
-type SafeMarket = MarketSummary & {
-  volume?: number;
-  percent_true?: number;
-  percent_false?: number;
-};
-
 /* ---------- Component ---------- */
 
 export default function TopMarketHighlight({ markets }: { markets: MarketSummary[] }) {
@@ -53,15 +47,14 @@ export default function TopMarketHighlight({ markets }: { markets: MarketSummary
     function getTop() {
       // Prefer running markets: state=open, resolved=false
       const running = markets.filter(
-        (m: any) => m.state === "open" && m.resolved === false
-      );
+  (m: MarketSummary) => m.state === "open" && m.resolved === false
+);
 
       const pool = running.length > 0 ? running : markets;
 
       const best = [...pool].sort(
-        (a: any, b: any) => (b.volume ?? 0) - (a.volume ?? 0)
-      )[0];
-
+  (a: MarketSummary, b: MarketSummary) => (b.volume ?? 0) - (a.volume ?? 0)
+)[0];
       if (!best) return;
 
       setTop(best);
@@ -155,7 +148,7 @@ export default function TopMarketHighlight({ markets }: { markets: MarketSummary
   // Status logic (Running / Pending / Ended) using state + resolved
   const isRunning = market.state === "open" && market.resolved === false;
   const isPending = market.state === "open" && market.resolved === true;
-  const isEnded = market.state === "resolved";
+ 
 
   let statusLabel = "Ended";
   let dotClass = "bg-red-500";
