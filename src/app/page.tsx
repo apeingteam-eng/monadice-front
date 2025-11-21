@@ -21,6 +21,18 @@ export default function Home() {
     "All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL"
   >("All");
 
+
+  // Capture referral code from URL
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get("ref");
+
+  if (ref) {
+    localStorage.setItem("referral_code", ref);
+  }
+}, []);
 useEffect(() => {
   async function loadMarkets() {
     try {

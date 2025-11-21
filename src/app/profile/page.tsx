@@ -8,6 +8,7 @@ import BetHistoryList, { Bet } from "@/features/user/components/BetHistoryList";
 import WinLossChart from "@/features/user/components/WinLossChart";
 import StatsCard from "@/features/user/components/StatsCard";
 import PortfolioCard from "@/features/user/components/PortfolioCard";
+import ReferralCard from "@/features/user/components/ReferralCard";
 
 import { getMe, UserMeResponse, getAuthHeader } from "@/features/user/utils/userService";
 import { getUserBets, UserBet } from "@/features/user/utils/betService";
@@ -84,13 +85,15 @@ export default function ProfilePage() {
   const [summary, setSummary] = useState<UserSummary | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [createdBets, setCreatedBets] = useState<Campaign[]>([]);
-const [marketTitles, setMarketTitles] = useState<Record<string, string>>({});
+  const [marketTitles, setMarketTitles] = useState<Record<string, string>>({});
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
+  const [portfolioValue, setPortfolioValue] = useState(0);
+  const [cash, setCash] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+const [points, setPoints] = useState<number>(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -103,55 +106,68 @@ const [marketTitles, setMarketTitles] = useState<Record<string, string>>({});
           getUserSummary(),
           getUserBets(),
           getMyCreatedBets(),
+          
         ]);
 
         setUser(userData);
         setSummary(summaryData);
         setCreatedBets(created as Campaign[]);
+        setPoints(userData.points);
 
+        function determineBetStatus(b: UserBet, c: Campaign | null) {
+    if (!c) return "Pending";
+    if (c.state !== "resolved") return "Pending";
+    if (c.outcome_true === null) return "Pending";
+
+    const didWin =
+        (c.outcome_true && b.side) ||
+        (!c.outcome_true && !b.side);
+
+    return didWin ? "Won" : "Lost";
+}
         /* -----------------------
            Transform user bet history
+
+           
         ------------------------ */
-       const mappedBets: Bet[] = userBets.map((b: UserBet) => ({
-  id: b.id,
-  campaign_address: b.campaign_address,
-  ticket_id: b.ticket_id,
-  side: b.side,
-  stake: b.stake,
-  payout: b.payout,             // backend may return null
-  claimed: b.claimed,
-  created_at: b.created_at,
-
-  // Derived fields
-  outcome: b.side ? "Yes" : "No",
-  status: "Pending",
-  pnl: b.claimed
-    ? b.payout ?? -b.stake     // if claimed, use payout or negative stake
-    : 0,                       // if not claimed yet
+   const mappedBets: Bet[] = userBets.map((b: UserBet) => ({
+    id: b.id,
+    campaign_address: b.campaign_address,
+    ticket_id: b.ticket_id,
+    side: b.side,
+    stake: b.stake,
+    payout: b.payout,
+    claimed: b.claimed,
+    created_at: b.created_at,
+    outcome: b.side ? "Yes" : "No",
+    status: "Pending",
+    pnl: 0
 }));
-        const campaigns = await Promise.all(
-          userBets.map((b: UserBet) => getCampaignByAddress(b.campaign_address))
-        );
 
-        let winCount = 0;
-        let lossCount = 0;
+const campaigns = await Promise.all(
+    userBets.map((b: UserBet) => getCampaignByAddress(b.campaign_address))
+);
 
-        const updatedBets = mappedBets.map((bet, i) => {
-          const campaign = campaigns[i];
-          if (!campaign || campaign.outcome_true === null) return bet;
+let winCount = 0;
+let lossCount = 0;
 
-          const didWin =
-            (campaign.outcome_true && userBets[i].side) ||
-            (!campaign.outcome_true && !userBets[i].side);
+const updatedBets = mappedBets.map((bet, i) => {
+    const campaign = campaigns[i];
 
-          if (didWin) {
-            winCount++;
-            return { ...bet, status: "Won" as const };
-          } else {
-            lossCount++;
-            return { ...bet, status: "Lost" as const };
-          }
-        });
+    const status = determineBetStatus(userBets[i], campaign);
+
+    let pnl = 0;
+
+    if (status === "Won") {
+        winCount++;
+        pnl = (userBets[i].payout ?? bet.stake) - bet.stake;
+    } else if (status === "Lost") {
+        lossCount++;
+        pnl = -bet.stake;
+    }
+
+    return { ...bet, status, pnl };
+});
 // Build market title map
 const marketTitles: Record<string, string> = {};
 campaigns.forEach((c) => {
@@ -163,6 +179,18 @@ setMarketTitles(marketTitles);
         setBets(updatedBets as Bet[]);
         setWins(winCount);
         setLosses(lossCount);
+
+        const pendingStake = updatedBets
+  .filter((b) => b.status === "Pending")
+  .reduce((sum, b) => sum + b.stake, 0);
+
+const unclaimedWins = updatedBets
+  .filter((b) => b.status === "Won" && !b.claimed)
+  .reduce((sum, b) => sum + (b.payout ?? 0), 0);
+
+setPortfolioValue(pendingStake + unclaimedWins);
+setCash(summaryData.total_claimed);
+
       } catch (err) {
         console.error("❌ Failed to load profile:", err);
         setError(err instanceof Error ? err.message : "Failed to load profile");
@@ -232,10 +260,10 @@ setMarketTitles(marketTitles);
       {/* Portfolio + Stats */}
       <div className="px-6 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-1">
-          <PortfolioCard
-            totalStaked={summary.total_staked}
-            totalClaimed={summary.total_claimed}
-          />
+     <PortfolioCard
+  portfolioValue={portfolioValue}
+  cash={cash}
+/>
         </div>
 
         <StatsCard label="Wins" value={wins} />
@@ -268,6 +296,46 @@ setMarketTitles(marketTitles);
         Manage your on-chain activity and track your performance over time.
       </p>
     </div>
+
+      {/* Points Block */}
+<div className="
+  rounded-xl 
+  border border-accentPurple/40 
+  bg-neutral-900 
+  p-5 
+  relative 
+  overflow-hidden
+  shadow-[0_0_20px_rgba(155,93,229,0.25)]
+">
+  {/* Glowing gradient blur behind points */}
+  <div className="
+    absolute inset-0 
+    bg-gradient-to-br from-accentPurple/30 via-[#8a4ae4]/20 to-transparent 
+    blur-2xl opacity-60
+  " />
+
+  {/* Content */}
+  <div className="relative z-10 text-center">
+    <h3 className="text-base font-semibold mb-1 text-neutral-200">Your Points</h3>
+
+    <div
+      className="
+        text-4xl font-bold 
+        text-accentPurple 
+        drop-shadow-[0_0_10px_rgba(155,93,229,0.8)]
+        animate-pulse-slow
+      "
+    >
+      {points}
+    </div>
+
+    <p className="text-xs text-neutral-500 mt-1">
+      Earn points by creating markets, placing bets, and more.
+    </p>
+  </div>
+
+</div>
+<ReferralCard /> 
   </div>
 </div>
 

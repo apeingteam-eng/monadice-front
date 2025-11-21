@@ -22,6 +22,66 @@ type PayoutResponse = {
   estimated_profit: number;
 };
 
+function CustomDropdown({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="
+          w-full px-3 py-2 rounded-md
+          bg-neutral-900/60 border border-neutral-700/50
+          text-neutral-200 text-left
+          focus:border-accentPurple focus:ring-1 focus:ring-accentPurple
+          outline-none transition
+          flex justify-between items-center
+        "
+      >
+        {value}
+        <span className="text-neutral-500">▼</span>
+      </button>
+
+      {open && (
+        <div
+          className="
+            absolute left-0 right-0 mt-2
+            bg-neutral-900/90 backdrop-blur-xl
+            border border-neutral-700/50
+            rounded-lg shadow-xl z-20
+          "
+        >
+          {options.map((opt) => (
+            <div
+              key={opt}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+              className="
+                px-3 py-2 cursor-pointer
+                text-neutral-200
+                hover:bg-accentPurple/20 transition
+              "
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) {
   const toast = useToast();
 
@@ -34,7 +94,8 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
   const [payoutData, setPayoutData] = useState<PayoutResponse | null>(null);
   const [fetchingPayout, setFetchingPayout] = useState(false);
   const [loading, setLoading] = useState(false);
-
+const accessToken =
+  typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   /* --------------------- Fetch payout preview ----------------------------- */
   useEffect(() => {
     if (!amount || Number(amount) <= 0) {
@@ -89,6 +150,10 @@ export default function PlaceBetForm({ campaignAddress, bettingClosed }: Props) 
 
   /* --------------------------- Place Bet ---------------------------------- */
   const handlePlaceBet = async () => {
+    if (!accessToken) {
+    toast.error("Please log in to place a bet.");
+    return;
+  }
     if (!isConnected || !walletClient || !address) {
       toast.error("Wallet not connected.");
       return;
@@ -232,14 +297,11 @@ const saveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bet/save`, {
       <h3 className="text-base font-semibold">Place Bet</h3>
 
       <label className="text-sm">Outcome</label>
-      <select
+      <CustomDropdown
         value={outcome}
-        onChange={(e) => setOutcome(e.target.value as "Yes" | "No")}
-        className="w-full rounded-md border border-neutral-700 bg-transparent px-3 py-2 text-sm"
-      >
-        <option value="Yes">Yes</option>
-        <option value="No">No</option>
-      </select>
+        onChange={(v) => setOutcome(v as "Yes" | "No")}
+        options={["Yes", "No"]}
+      />
 
       <label className="text-sm">Amount (USDC)</label>
       <input

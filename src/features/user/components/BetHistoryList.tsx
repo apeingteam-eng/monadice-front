@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "@/config/api";
 
 /* --------------------------------------------------------------
-   Bet Type
+   Types
 -------------------------------------------------------------- */
+
 export type Bet = {
   id: number;
   campaign_address: string;
@@ -16,6 +18,7 @@ export type Bet = {
   claimed: boolean;
   created_at: string;
 
+  // Derived
   status: "Pending" | "Won" | "Lost";
   outcome: "Yes" | "No";
   pnl: number;
@@ -26,8 +29,16 @@ type BetHistoryListProps = {
   marketTitles: Record<string, string>;
 };
 
-/* Grouped bets type */
 type GroupedBets = Record<string, Bet[]>;
+
+type CampaignResp = {
+  id: number;
+  campaign_address: string;
+  name: string;
+  resolved: boolean;
+  outcome_true: boolean | null;
+  state: string; // open | resolved
+};
 
 /* --------------------------------------------------------------
    Status badge
@@ -44,20 +55,66 @@ function StatusBadge({ status }: { status: Bet["status"] }) {
 }
 
 /* --------------------------------------------------------------
-   MAIN COMPONENT (GROUPED BY CAMPAIGN)
+   MAIN COMPONENT
 -------------------------------------------------------------- */
 export default function BetHistoryList({
   bets,
   marketTitles = {},
 }: BetHistoryListProps) {
-  // Remove any ➜ use GroupedBets
-  const grouped: GroupedBets = bets.reduce((acc, b) => {
+  const [updatedBets, setUpdatedBets] = useState<Bet[]>([]);
+
+  useEffect(() => {
+    async function enrichBets() {
+      const results: Bet[] = [];
+
+      for (const bet of bets) {
+        let status: Bet["status"] = "Pending";
+
+        try {
+          const res = await api.get<CampaignResp[]>(
+            "/factory/campaigns"
+          );
+
+          const all = res.data;
+          const campaign = all.find(
+            (c) =>
+              c.campaign_address.toLowerCase() ===
+              bet.campaign_address.toLowerCase()
+          );
+
+          if (campaign && campaign.state === "resolved") {
+            if (campaign.outcome_true !== null) {
+              const didWin =
+                (campaign.outcome_true && bet.side) ||
+                (!campaign.outcome_true && !bet.side);
+
+              status = didWin ? "Won" : "Lost";
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load campaign info", e);
+        }
+
+        results.push({
+          ...bet,
+          status,
+        });
+      }
+
+      setUpdatedBets(results);
+    }
+
+    enrichBets();
+  }, [bets]);
+
+  /* Group */
+  const grouped: GroupedBets = updatedBets.reduce((acc, b) => {
     if (!acc[b.campaign_address]) acc[b.campaign_address] = [];
     acc[b.campaign_address].push(b);
     return acc;
   }, {} as GroupedBets);
 
-  const campaigns = Object.entries(grouped); // [address, Bet[]][]
+  const campaigns = Object.entries(grouped);
 
   if (campaigns.length === 0) {
     return (
@@ -82,7 +139,7 @@ export default function BetHistoryList({
 }
 
 /* --------------------------------------------------------------
-   Collapsible GROUP SECTION
+   Accordion Section
 -------------------------------------------------------------- */
 function CampaignAccordion({
   address,
@@ -95,11 +152,8 @@ function CampaignAccordion({
 }) {
   const [open, setOpen] = useState(false);
 
-  const shortened = `${address.slice(0, 6)}…${address.slice(-4)}`;
-
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900/50">
-      {/* HEADER */}
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex justify-between items-center px-4 py-3 hover:bg-neutral-900"
@@ -107,14 +161,13 @@ function CampaignAccordion({
         <div className="flex flex-col text-left">
           <span className="font-medium text-white">{title}</span>
           <span className="text-xs text-neutral-400">
-            Market {shortened}
+            Market {address.slice(0, 6)}…{address.slice(-4)}
           </span>
         </div>
 
         <span className="text-neutral-400 text-xs">{open ? "▲" : "▼"}</span>
       </button>
 
-      {/* BODY */}
       {open && (
         <div className="divide-y divide-neutral-800">
           {bets.map((b) => (

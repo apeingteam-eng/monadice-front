@@ -92,14 +92,20 @@ export default function CreateMarketPage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("CRYPTO");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-
+const accessToken = typeof window !== "undefined"
+  ? localStorage.getItem("access_token")
+  : null;
   const [signer, setSigner] = useState<Signer | null>(null);
   const [allowanceEnough, setAllowanceEnough] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [buttonStage, setButtonStage] = useState<"verify" | "approve" | "create">("verify");
   const minSelectableDate = addMinutes(new Date(), 10);
-
+const [participantA, setParticipantA] = useState("");
+const [participantB, setParticipantB] = useState("");
+const [sportOutcome, setSportOutcome] = useState<"beat" | "draw" | "score">("beat");
+const [scoreA, setScoreA] = useState("");
+const [scoreB, setScoreB] = useState("");
   /* --------------------------------- SIGNER -------------------------------- */
   useEffect(() => {
     async function setup() {
@@ -128,47 +134,90 @@ export default function CreateMarketPage() {
     checkAllowance();
   }, [signer, address]);
 
+  const buildSportsTitle = () => {
+  if (sportOutcome === "beat") {
+    return `${participantA} beat ${participantB}`;
+  }
+  if (sportOutcome === "draw") {
+    return `${participantA} vs ${participantB} ends in draw`;
+  }
+  if (sportOutcome === "score") {
+    return `Score ${participantA} vs ${participantB} ${scoreA}-${scoreB}`;
+  }
+  return "";
+};
   /* ----------------------------- VERIFY CAMPAIGN --------------------------- */
   const handleVerify = async () => {
-    if (!title.trim()) return toast.error("Enter a market title.");
-    if (!selectedDate) return toast.error("Select an end date.");
-    if (!address) return toast.error("Connect your wallet.");
+  if (!accessToken) return toast.error("Please log in to create a market.");
+  if (!selectedDate) return toast.error("Select an end date.");
+  if (!address) return toast.error("Connect your wallet.");
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      toast.info("Verifying market…");
-      const body = {
+  try {
+    let body;
+    let url;
+
+    if (category === "SPORTS") {
+      if (!participantA.trim()) return toast.error("Enter name for Participant A.");
+      if (!participantB.trim()) return toast.error("Enter name for Participant B.");
+
+let outcomeForAPI: string = sportOutcome;
+      if (sportOutcome === "score") {
+        outcomeForAPI = `${scoreA}-${scoreB}`;
+      }
+
+      body = {
+        team_a: participantA,
+        team_b: participantB,
+        outcome: outcomeForAPI,
+        user_wallet: address,
+        end_time: selectedDate.toISOString(),
+      };
+
+      url = `${process.env.NEXT_PUBLIC_API_URL}/verify-sports-campaign/`;
+    } 
+    else {
+      // CRYPTO, POLITICS, SOCIAL (existing)
+      if (category !== "SPORTS" && !title.trim()) {
+  return toast.error("Enter a market title.");
+}
+
+      body = {
         title,
         end_time: selectedDate.toISOString(),
         user_wallet: address,
         category: category.toLowerCase(),
       };
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/verify-campaign/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.verified) {
-        toast.error(data.message || "Statement not measurable.");
-        setVerified(false);
-        return;
-      }
-
-      toast.success("Draft verified! ✔");
-      setVerified(true);
-      setButtonStage("approve");
-    } catch {
-      toast.error("Verification failed.");
-    } finally {
-      setLoading(false);
+      url = `${process.env.NEXT_PUBLIC_API_URL}/verify-campaign/`;
     }
-  };
 
+    toast.info("Verifying market…");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.verified) {
+      toast.error(data.message || "Statement not measurable.");
+      setVerified(false);
+      return;
+    }
+
+    toast.success("Draft verified! ✔");
+    setVerified(true);
+    setButtonStage("approve");
+
+  } catch (err) {
+    toast.error("Verification failed.");
+  } finally {
+    setLoading(false);
+  }
+};
   /* --------------------------------- APPROVE -------------------------------- */
   const handleApprove = async () => {
     if (!signer) return toast.error("Wallet not ready.");
@@ -197,34 +246,87 @@ export default function CreateMarketPage() {
   };
 
   /* ------------------------------ CREATE MARKET ---------------------------- */
-  const handleCreateMarket = async () => {
-    if (!verified) return toast.error("Verify your market first.");
-    if (!signer) return toast.error("Wallet not ready.");
-    if (chainId !== TARGET_CHAIN_ID) return toast.error(`Switch to ${CHAIN.name}.`);
-    if (!selectedDate) return toast.error("Date missing.");
+ const handleCreateMarket = async () => {
+  if (!verified) return toast.error("Verify your market first.");
+  if (!signer) return toast.error("Wallet not ready.");
+  if (chainId !== TARGET_CHAIN_ID) return toast.error(`Switch to ${CHAIN.name}.`);
+  if (!selectedDate) return toast.error("Date missing.");
 
-    try {
-      setLoading(true);
-      toast.info("Creating market…");
+  try {
+    setLoading(true);
+    toast.info("Creating market…");
 
-      const endUnix = Math.floor(selectedDate.getTime() / 1000);
-      const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
+    const endUnix = Math.floor(selectedDate.getTime() / 1000);
+    const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
 
-      const tx = await factory.createCampaign(title, category, endUnix, 200);
-      await tx.wait();
+    const tx = await factory.createCampaign(title, category, endUnix, 200);
+    toast.info("Waiting for confirmations…");
 
-      toast.success("Market created!");
+    const receipt = await tx.wait(2);
 
-      toast.info("Syncing backend…");
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
+   let campaignAddress: string | null = null;
 
-      toast.success("Backend synced!");
-    } catch {
-      toast.error("Create failed.");
-    } finally {
-      setLoading(false);
+for (const log of receipt.logs) {
+  if (log.address.toLowerCase() !== FACTORY_ADDRESS.toLowerCase()) continue;
+
+  let parsed: any = null;
+  try {
+    parsed = factory.interface.parseLog(log);
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed && parsed.name === "CampaignDeployed") {
+  campaignAddress = parsed.args[2];
+  break;
+}
+}
+
+    if (!campaignAddress) {
+      return toast.error("Could not extract campaign address.");
     }
-  };/* --------------------------------- UI ----------------------------------- */
+
+    toast.success(`Market deployed: ${campaignAddress}`);
+
+    // --- Poll backend for event ---
+    toast.info("Waiting for backend sync…");
+
+    let synced = false;
+    for (let i = 0; i < 8; i++) {
+      const syncRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
+      if (syncRes.ok) {
+        synced = true;
+        break;
+      }
+      await new Promise(res => setTimeout(res, 1200));
+    }
+
+    synced ? toast.success("Backend synced!") : toast.error("Backend sync failed.");
+
+    // --- Award points ---
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/points/createUserPoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_wallet: address,
+          campaign_address: campaignAddress,
+        }),
+      });
+
+      toast.success("Points granted!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Points failed.");
+    }
+
+  } catch (err) {
+    console.error(err);
+    toast.error("Create failed.");
+  } finally {
+    setLoading(false);
+  }
+};/* --------------------------------- UI ----------------------------------- */
 return (
   <div className="relative min-h-screen w-full overflow-hidden text-white">
     {/* Background video */}
@@ -262,27 +364,140 @@ return (
             ">
           
           {/* Market Title */}
-          <div className="space-y-1">
-            <label className="text-sm text-neutral-300">Market Title</label>
-            <input
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setVerified(null);
-                setButtonStage("verify");
-              }}
-              placeholder="e.g. BTC above 100K?"
-              className="
-                w-full px-3 py-2
-                rounded-md 
-                bg-neutral-900/60 
-                border border-neutral-700/50
-                focus:border-accentPurple
-                focus:ring-1 focus:ring-accentPurple
-                outline-none transition
-              "
-            />
-          </div>
+          {category !== "SPORTS" && (
+  <div className="space-y-1">
+    <label className="text-sm text-neutral-300">Market Title</label>
+    <input
+      value={title}
+      onChange={(e) => {
+        setTitle(e.target.value);
+        setVerified(null);
+        setButtonStage("verify");
+      }}
+      placeholder="e.g. BTC above 100K?"
+      className="
+        w-full px-3 py-2
+        rounded-md 
+        bg-neutral-900/60 
+        border border-neutral-700/50
+        focus:border-accentPurple
+        focus:ring-1 focus:ring-accentPurple
+        outline-none transition
+      "
+    />
+  </div>
+)}
+
+          {/* SPORTS MODE FIELDS */}
+          {category === "SPORTS" && (
+            <div className="space-y-4">
+
+              {/* Participant A */}
+              <div className="space-y-1">
+                <label className="text-sm text-neutral-300">Participant A</label>
+                <input
+                  value={participantA}
+                  onChange={(e) => {
+                    setParticipantA(e.target.value);
+                    setVerified(null);
+                    setButtonStage("verify");
+                  }}
+                  placeholder="e.g. Barcelona, UFC Fighter"
+                  className="
+                    w-full px-3 py-2
+                    rounded-md 
+                    bg-neutral-900/60 
+                    border border-neutral-700/50
+                    focus:border-accentPurple
+                    focus:ring-1 focus:ring-accentPurple
+                    outline-none transition
+                  "
+                />
+              </div>
+
+              {/* Participant B */}
+              <div className="space-y-1">
+                <label className="text-sm text-neutral-300">Participant B</label>
+                <input
+                  value={participantB}
+                  onChange={(e) => {
+                    setParticipantB(e.target.value);
+                    setVerified(null);
+                    setButtonStage("verify");
+                  }}
+                  placeholder="e.g. Chelsea, UFC Fighter"
+                  className="
+                    w-full px-3 py-2
+                    rounded-md 
+                    bg-neutral-900/60 
+                    border border-neutral-700/50
+                    focus:border-accentPurple
+                    focus:ring-1 focus:ring-accentPurple
+                    outline-none transition
+                  "
+                />
+              </div>
+
+              {/* Outcome Selection */}
+              {/* Outcome Selection */}
+<div className="space-y-1">
+  <label className="text-sm text-neutral-300">Outcome</label>
+
+  <CustomDropdown
+    value={sportOutcome}
+    onChange={(v) => {
+      setSportOutcome(v as "beat" | "draw" | "score");
+      setVerified(null);
+      setButtonStage("verify");
+    }}
+    options={["beat", "draw", "score"]}
+  />
+</div>
+
+              {/* Score Inputs */}
+              {sportOutcome === "score" && (
+                <div className="flex gap-3">
+                  <div className="w-1/2">
+                    <label className="text-sm text-neutral-300">Score A</label>
+                    <input
+                      type="number"
+                      value={scoreA}
+                      onChange={(e) => setScoreA(e.target.value)}
+                      placeholder="0"
+                      className="
+                        w-full px-3 py-2
+                        rounded-md 
+                        bg-neutral-900/60 
+                        border border-neutral-700/50
+                        focus:border-accentPurple
+                        focus:ring-1 focus:ring-accentPurple
+                        outline-none transition
+                      "
+                    />
+                  </div>
+
+                  <div className="w-1/2">
+                    <label className="text-sm text-neutral-300">Score B</label>
+                    <input
+                      type="number"
+                      value={scoreB}
+                      onChange={(e) => setScoreB(e.target.value)}
+                      placeholder="0"
+                      className="
+                        w-full px-3 py-2
+                        rounded-md 
+                        bg-neutral-900/60 
+                        border border-neutral-700/50
+                        focus:border-accentPurple
+                        focus:ring-1 focus:ring-accentPurple
+                        outline-none transition
+                      "
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
          {/* Category */}
 <div className="space-y-1">
@@ -305,34 +520,34 @@ return (
   </label>
 
   <ReactDatePicker
-    selected={selectedDate}
-    onChange={(d) => {
-      setSelectedDate(d);
-      setVerified(null);
-      setButtonStage("verify");
-    }}
-    showTimeSelect
-    timeIntervals={5}
-    dateFormat="dd.MM.yyyy HH:mm"
-    minDate={minSelectableDate}
-    minTime={
-      selectedDate &&
-      selectedDate.toDateString() === minSelectableDate.toDateString()
-        ? minSelectableDate
-        : new Date(selectedDate?.setHours(0, 0, 0, 0) || 0)
-    }
-    maxTime={new Date(new Date().setHours(23, 59, 59, 999))}
-    className="
-      w-full px-3 py-2
-      rounded-md
-      bg-neutral-900/60 
-      border border-neutral-700/50
-      focus:border-accentPurple
-      focus:ring-1 focus:ring-accentPurple
-      outline-none transition
-    "
-    calendarClassName="!bg-neutral-900 !text-white !border-neutral-700"
-  />
+  selected={selectedDate}
+  onChange={(d) => {
+    setSelectedDate(d);
+    setVerified(null);
+    setButtonStage("verify");
+  }}
+  showTimeSelect
+  timeIntervals={5}
+  dateFormat="dd.MM.yyyy HH:mm"
+  minDate={minSelectableDate}
+  minTime={
+    selectedDate &&
+    selectedDate.toDateString() === minSelectableDate.toDateString()
+      ? minSelectableDate               // today → restrict to current time
+      : new Date(0, 0, 0, 0, 0, 0)      // other days → allow full 00:00+
+  }
+  maxTime={new Date(0, 0, 0, 23, 59, 59)}
+  className="
+    w-full px-3 py-2
+    rounded-md
+    bg-neutral-900/60 
+    border border-neutral-700/50
+    focus:border-accentPurple
+    focus:ring-1 focus:ring-accentPurple
+    outline-none transition
+  "
+  calendarClassName="!bg-neutral-900 !text-white !border-neutral-700"
+/>
 </div>
 
           <button

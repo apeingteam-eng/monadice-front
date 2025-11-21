@@ -158,76 +158,135 @@ export default function CreateMarketTwoStep() {
   };
 
   /* ---------------------------- APPROVE LOGIC ----------------------------- */
-  const handleApprove = async () => {
-    if (!signer) {
-      setError("Wallet not ready.");
+ const handleApprove = async () => {
+  if (!signer) return setError("Wallet not ready.");
+
+  setError(null);
+  setStatus("Approving 1 USDC…");
+  setLoading(true);
+
+  try {
+    const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
+
+    // Send approval
+    const tx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
+
+    setStatus("Waiting for blockchain confirmations…");
+
+    // Wait for 2 confirmations
+    await tx.wait(2);
+
+    // Now verify allowance — loop until confirmed
+    let allowance = await usdc.allowance(address, FACTORY_ADDRESS);
+
+    while (allowance < REQUIRED_USDC) {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      allowance = await usdc.allowance(address, FACTORY_ADDRESS);
+    }
+
+    // Only now allow creation
+    setAllowanceEnough(true);
+    setStatus("USDC approved! ✔");
+  } catch (err) {
+    console.error(err);
+    setError("Approve failed.");
+  } finally {
+    setLoading(false);
+  }
+};
+  /* --------------------------- CREATE CAMPAIGN ---------------------------- */
+ const handleCreateMarket = async () => {
+  setError(null);
+  setStatus(null);
+  setTxHash(null);
+
+  if (!verifiedDraft) return setError("You must verify the campaign first.");
+  if (!signer) return setError("Wallet not ready.");
+  if (chainId !== TARGET_CHAIN_ID) return setError("Switch to Base Sepolia.");
+
+  setLoading(true);
+
+  try {
+    const unixEnd = Math.floor(new Date(endTime).getTime() / 1000);
+    const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
+
+    setStatus("Creating market…");
+    const tx = await factory.createCampaign(name, category, unixEnd, 200);
+    setTxHash(tx.hash);
+
+    setStatus("Waiting for 2 confirmations…");
+    const receipt = await tx.wait(2);
+
+    if (!receipt) {
+      setError("Could not read transaction receipt.");
+      setLoading(false);
       return;
     }
 
-    setError(null);
-    setStatus("Approving USDC…");
-    setLoading(true);
+    // --- Parse event ---
+    let campaignAddress: string | null = null;
 
-    try {
-      const usdc = new Contract(USDC_ADDRESS, ERC20ABI, signer);
+for (const log of receipt.logs) {
+  if (log.address.toLowerCase() !== FACTORY_ADDRESS.toLowerCase()) continue;
 
-      const tx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
-      await tx.wait();
+  let parsed: any = null;
+  try {
+    parsed = factory.interface.parseLog(log);
+  } catch {
+    parsed = null;
+  }
 
-      setStatus("USDC approved!");
-      setAllowanceEnough(true);
-    } catch {
-      setError("Approve failed.");
-    } finally {
+ if (parsed && parsed.name === "CampaignDeployed") {
+  campaignAddress = parsed.args[2];
+  break;
+}
+}
+
+    if (!campaignAddress) {
+      setError("Could not extract campaign address.");
       setLoading(false);
-    }
-  };
-
-  /* --------------------------- CREATE CAMPAIGN ---------------------------- */
-  const handleCreateMarket = async () => {
-    setError(null);
-    setStatus(null);
-    setTxHash(null);
-
-    if (!verifiedDraft) {
-      return setError("You must verify the campaign first.");
+      return;
     }
 
-    if (!signer) return setError("Wallet not ready.");
-    if (!address) return setError("Wallet not connected.");
-    if (chainId !== TARGET_CHAIN_ID)
-      return setError("Wrong network. Switch to Base Sepolia.");
+    setStatus(`Campaign deployed: ${campaignAddress}`);
 
-    setLoading(true);
+    // --- Important: Poll backend until event exists ---
+    setStatus("Waiting for backend to detect event…");
 
-    try {
-      const unixEnd = Math.floor(new Date(endTime).getTime() / 1000);
-      const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
-
-      setStatus("Creating market…");
-      const tx = await factory.createCampaign(name, category, unixEnd, 200);
-
-      setStatus("Waiting for confirmation…");
-      const receipt = await tx.wait();
-      setTxHash(receipt.hash);
-
-      setStatus("Market created!");
-
-      // BACKEND SYNC
-      setStatus("Syncing backend…");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
-      if (!res.ok) {
-        setStatus("Market created but backend sync failed.");
-      } else {
-        setStatus("Backend synced successfully!");
+    let synced = false;
+    for (let i = 0; i < 8; i++) {
+      const syncRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
+      if (syncRes.ok) {
+        synced = true;
+        break;
       }
-    } catch {
-      setError("Create failed.");
-    } finally {
-      setLoading(false);
+      await new Promise(res => setTimeout(res, 1200));
     }
-  };
 
+    setStatus(synced ? "Backend synced successfully!" : "Backend sync failed.");
+
+    // --- Award points ---
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/points/createUserPoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_wallet: address,
+          campaign_address: campaignAddress,
+        }),
+      });
+      setStatus("Points granted for creating a market!");
+    } catch (err) {
+      console.error("Points creation failed:", err);
+    }
+
+  } catch (err) {
+    console.error(err);
+    setError("Create failed.");
+  } finally {
+    setLoading(false);
+  }
+};
   /* ------------------------------- UI ------------------------------------ */
   return (
     <form className="space-y-5 p-6 bg-neutral-900 border border-neutral-800 rounded-xl">

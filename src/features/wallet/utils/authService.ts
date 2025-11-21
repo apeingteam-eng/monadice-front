@@ -34,6 +34,7 @@ export interface CreateUserSuccess {
   wallet_address: string;
   expires_in_days?: number;
 }
+
 export type CreateUserResponse = CreateUserSuccess;
 
 /* ===================================
@@ -59,13 +60,22 @@ export async function verifySignature(
   return res.data;
 }
 
-// 3️⃣ Create a new user (if username needed)
+// 3️⃣ Create a new user (username + optional referral)
+// 3️⃣ Create a new user (username + optional referral)
+// 3️⃣ Create a new user (username + optional referral)
 export async function createUser(
   walletAddress: string,
-  username: string
+  username: string,
+  refCode?: string | null  //  ⭐ accept optional 3rd arg
 ): Promise<CreateUserResponse> {
+
   const res = await api.post<CreateUserResponse>("/auth/create-user", null, {
-    params: { wallet_address: walletAddress, username },
+    params: {
+      wallet_address: walletAddress,
+      username,
+      ref_code_used: refCode || null,   // ⭐ send if exists
+    },
   });
+
   return res.data;
 }

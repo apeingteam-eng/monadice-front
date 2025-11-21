@@ -7,6 +7,7 @@ import api from "@/config/api";
 export interface UserMeResponse {
   username: string;
   wallet_address: string;
+  points: number; 
   // Add other fields if your backend returns them, e.g.:
   // email?: string;
   // created_at?: string;
