@@ -33,6 +33,7 @@ useEffect(() => {
     localStorage.setItem("referral_code", ref);
   }
 }, []);
+
 useEffect(() => {
   async function loadMarkets() {
     try {

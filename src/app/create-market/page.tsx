@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAccount, useWalletClient, useChainId } from "wagmi";
 import { BrowserProvider, Contract } from "ethers";
 import type { Eip1193Provider } from "ethers";
-
+import type { LogDescription } from "ethers";
 import ReactDatePicker from "react-datepicker";
 import { addMinutes } from "date-fns";
 
@@ -96,7 +96,7 @@ const accessToken = typeof window !== "undefined"
   ? localStorage.getItem("access_token")
   : null;
   const [signer, setSigner] = useState<Signer | null>(null);
-  const [allowanceEnough, setAllowanceEnough] = useState(false);
+  const [, setAllowanceEnough] = useState(false); // intentionally unused
   const [verified, setVerified] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [buttonStage, setButtonStage] = useState<"verify" | "approve" | "create">("verify");
@@ -134,18 +134,6 @@ const [scoreB, setScoreB] = useState("");
     checkAllowance();
   }, [signer, address]);
 
-  const buildSportsTitle = () => {
-  if (sportOutcome === "beat") {
-    return `${participantA} beat ${participantB}`;
-  }
-  if (sportOutcome === "draw") {
-    return `${participantA} vs ${participantB} ends in draw`;
-  }
-  if (sportOutcome === "score") {
-    return `Score ${participantA} vs ${participantB} ${scoreA}-${scoreB}`;
-  }
-  return "";
-};
   /* ----------------------------- VERIFY CAMPAIGN --------------------------- */
   const handleVerify = async () => {
   if (!accessToken) return toast.error("Please log in to create a market.");
@@ -212,7 +200,7 @@ let outcomeForAPI: string = sportOutcome;
     setVerified(true);
     setButtonStage("approve");
 
-  } catch (err) {
+ } catch {
     toast.error("Verification failed.");
   } finally {
     setLoading(false);
@@ -269,7 +257,7 @@ let outcomeForAPI: string = sportOutcome;
 for (const log of receipt.logs) {
   if (log.address.toLowerCase() !== FACTORY_ADDRESS.toLowerCase()) continue;
 
-  let parsed: any = null;
+  let parsed: LogDescription | null = null;
   try {
     parsed = factory.interface.parseLog(log);
   } catch {
