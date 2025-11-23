@@ -17,6 +17,7 @@ export type Bet = {
   payout: number | null;
   claimed: boolean;
   created_at: string;
+  category?: string;
 
   // Derived
   status: "Pending" | "Won" | "Lost";
@@ -27,8 +28,8 @@ export type Bet = {
 type BetHistoryListProps = {
   bets: Bet[];
   marketTitles: Record<string, string>;
+  marketIds: Record<string, number>;
 };
-
 type GroupedBets = Record<string, Bet[]>;
 
 type CampaignResp = {
@@ -46,12 +47,12 @@ type CampaignResp = {
 function StatusBadge({ status }: { status: Bet["status"] }) {
   const cls =
     status === "Won"
-      ? "bg-green-500/15 text-green-400"
+      ? "bg-green-500/20 text-green-300 border border-green-500/30"
       : status === "Lost"
-      ? "bg-red-500/15 text-red-400"
-      : "bg-yellow-500/15 text-yellow-400";
+      ? "bg-red-500/20 text-red-300 border border-red-500/30"
+      : "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30";
 
-  return <span className={`px-2 py-1 rounded text-xs ${cls}`}>{status}</span>;
+  return <span className={`px-2 py-1 rounded-lg text-xs font-medium backdrop-blur-sm ${cls}`}>{status}</span>;
 }
 
 /* --------------------------------------------------------------
@@ -60,6 +61,7 @@ function StatusBadge({ status }: { status: Bet["status"] }) {
 export default function BetHistoryList({
   bets,
   marketTitles = {},
+  marketIds,   
 }: BetHistoryListProps) {
   const [updatedBets, setUpdatedBets] = useState<Bet[]>([]);
 
@@ -132,6 +134,7 @@ export default function BetHistoryList({
           address={address}
           bets={betList}
           title={marketTitles[address] || "Unknown Market"}
+          marketIds={marketIds}
         />
       ))}
     </div>
@@ -145,18 +148,20 @@ function CampaignAccordion({
   address,
   bets,
   title,
+  marketIds,
 }: {
   address: string;
   bets: Bet[];
   title: string;
+  marketIds: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 backdrop-blur-xl shadow-[0_0_25px_rgba(155,93,229,0.15)] transition-all duration-300 hover:shadow-[0_0_35px_rgba(155,93,229,0.35)] hover:rounded-xl">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex justify-between items-center px-4 py-3 hover:bg-neutral-900"
+        className="w-full flex justify-between items-center px-4 py-4 hover:bg-neutral-900/80 transition-all duration-300 rounded-xl"
       >
         <div className="flex flex-col text-left">
           <span className="font-medium text-white">{title}</span>
@@ -169,7 +174,7 @@ function CampaignAccordion({
       </button>
 
       {open && (
-        <div className="divide-y divide-neutral-800">
+        <div className="divide-y divide-neutral-800 bg-neutral-900/40 p-3 rounded-xl">
           {bets.map((b) => (
             <div
               key={b.id}
@@ -178,8 +183,8 @@ function CampaignAccordion({
               {/* LEFT */}
               <div>
                 <Link
-                  href={`/market/${address}`}
-                  className="text-neutral-300 hover:underline text-sm"
+                  href={`/market/${marketIds[address]}`}
+                  className="text-neutral-200 hover:text-accentPurple transition text-sm font-medium"
                 >
                   Ticket #{b.ticket_id}
                 </Link>

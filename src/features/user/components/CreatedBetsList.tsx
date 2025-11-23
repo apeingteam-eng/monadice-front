@@ -17,7 +17,7 @@ export interface CreatedCampaign {
   campaign_address: string;
   end_time: number;
   state: string; // open | resolved | canceled
-  outcome_true: boolean | null;
+  outcome_true: number | null;
   fee_bps: number;
 }
 
@@ -126,15 +126,15 @@ export default function CreatedBetsList({ campaigns }: Props) {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 w-full">
         <h3 className="text-base font-semibold">My Created Markets</h3>
 
-        <div className="flex flex-col lg:flex-row gap-3">
+        <div className="flex flex-col lg:flex-row gap-3 w-full">
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide py-1">
             {["All", "Running", "Pending", "Ended", "Cancelled"].map((f) => (
               <button
                 key={f}
                 onClick={() => setActiveFilter(f as "All" | "Running" | "Pending" | "Ended" | "Cancelled")}
                 className={`
-                  px-3 py-1 text-xs rounded-full border transition
+                  shrink-0 px-3 py-1 text-xs rounded-full border transition
                   ${
                     activeFilter === f
                       ? "border-accentPurple text-accentPurple bg-accentPurple/10"
@@ -149,13 +149,13 @@ export default function CreatedBetsList({ campaigns }: Props) {
 
           <div className="hidden lg:block w-px bg-neutral-700"></div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-hide py-1">
             {["All", "SPORTS", "CRYPTO", "POLITICS", "SOCIAL"].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat as "All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL")}
                 className={`
-                  px-3 py-1 text-xs rounded-full border transition
+                  shrink-0 px-3 py-1 text-xs rounded-full border transition
                   ${
                     categoryFilter === cat
                       ? "border-accentPurple text-accentPurple bg-accentPurple/10"

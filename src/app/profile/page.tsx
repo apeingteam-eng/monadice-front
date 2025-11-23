@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 
 import ProfileHeader from "@/features/user/components/ProfileHeader";
 import BetHistoryList, { Bet } from "@/features/user/components/BetHistoryList";
-import WinLossChart from "@/features/user/components/WinLossChart";
+import UserPerformanceAnalytics from "@/features/user/components/UserPerformanceAnalytics";
 import StatsCard from "@/features/user/components/StatsCard";
 import PortfolioCard from "@/features/user/components/PortfolioCard";
 import ReferralCard from "@/features/user/components/ReferralCard";
-
+import ProfileSkeleton from "./ProfileSkeleton";
 import { getMe, UserMeResponse, getAuthHeader } from "@/features/user/utils/userService";
 import { getUserBets, UserBet } from "@/features/user/utils/betService";
 
@@ -30,13 +30,24 @@ export interface UserSummary {
 
 export interface Campaign {
   id: number;
+  campaign_address: string;
+  creator_wallet: string;
   name: string;
   symbol: string;
-  campaign_address: string;
-  outcome_true: boolean | null;
-  state: string;
   end_time: number;
   fee_bps: number;
+  state: string;
+  creation_stake: number;
+  resolved: boolean;
+  outcome_true: number | null; // 0 or 1 from DB
+  totalTrue: number;
+  totalFalse: number;
+  totalInitialPot: number;
+  volume: number;
+  yes_odds: number;
+  no_odds: number;
+  percent_true: number;
+  percent_false: number;
   category: string;
 }
 
@@ -90,7 +101,7 @@ export default function ProfilePage() {
   const [losses, setLosses] = useState(0);
   const [portfolioValue, setPortfolioValue] = useState(0);
   const [cash, setCash] = useState(0);
-
+const [marketIds, setMarketIds] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 const [points, setPoints] = useState<number>(0);
@@ -152,43 +163,79 @@ let winCount = 0;
 let lossCount = 0;
 
 const updatedBets = mappedBets.map((bet, i) => {
-    const campaign = campaigns[i];
+  const campaign = campaigns[i];
+  const status = determineBetStatus(userBets[i], campaign);
 
-    const status = determineBetStatus(userBets[i], campaign);
+  let pnl = 0;
+  let ticketValue = 0;
+  const stake = bet.stake;
 
-    let pnl = 0;
+  if (campaign) {
+    const tTrue = campaign.totalTrue ?? 0;
+    const tFalse = campaign.totalFalse ?? 0;
+    const tPot = campaign.totalInitialPot ?? 0;
+    const fBps = campaign.fee_bps ?? 0;
+
+    const pool = tTrue + tFalse + tPot;
+    const fee = (pool * fBps) / 10000;
+    const distributable = pool - fee;
+
+    const isYes = bet.side === true;        // FIXED
+    const outcome = campaign.outcome_true;  // number 0/1
 
     if (status === "Won") {
-        winCount++;
-        pnl = (userBets[i].payout ?? bet.stake) - bet.stake;
-    } else if (status === "Lost") {
-        lossCount++;
-        pnl = -bet.stake;
-    }
+      const winnersTotal = outcome === 1 ? tTrue : tFalse;
 
-    return { ...bet, status, pnl };
+      const payout = winnersTotal > 0
+        ? (stake / winnersTotal) * distributable
+        : stake;
+
+      pnl = payout - stake;
+      ticketValue = payout;
+
+    } else if (status === "Lost") {
+      pnl = -stake;
+      ticketValue = 0;
+
+    } else {
+      // Pending → potential value
+      const sideTotal = isYes ? tTrue : tFalse;
+      ticketValue =
+        sideTotal > 0 ? (stake / sideTotal) * distributable : stake;
+      pnl = ticketValue - stake;
+    }
+  }
+if (status === "Won") winCount++;
+if (status === "Lost") lossCount++;
+  return { ...bet, status, pnl, ticketValue,category: campaign?.symbol || "Unknown" };
 });
 // Build market title map
-const marketTitles: Record<string, string> = {};
+const titles: Record<string, string> = {};
+const ids: Record<string, number> = {};
+
 campaigns.forEach((c) => {
   if (c) {
-    marketTitles[c.campaign_address] = c.name || "Unknown Market";
+    titles[c.campaign_address] = c.name || "Unknown Market";
+    ids[c.campaign_address] = c.id;
   }
 });
-setMarketTitles(marketTitles);
+
+setMarketTitles(titles);
+setMarketIds(ids);
         setBets(updatedBets as Bet[]);
         setWins(winCount);
         setLosses(lossCount);
 
-        const pendingStake = updatedBets
-  .filter((b) => b.status === "Pending")
-  .reduce((sum, b) => sum + b.stake, 0);
-
 const unclaimedWins = updatedBets
   .filter((b) => b.status === "Won" && !b.claimed)
-  .reduce((sum, b) => sum + (b.payout ?? 0), 0);
+  .reduce((sum, b) => sum + b.ticketValue, 0);
 
-setPortfolioValue(pendingStake + unclaimedWins);
+const pendingStake = updatedBets
+  .filter((b) => b.status === "Pending")
+  .reduce((sum, b) => sum + b.ticketValue, 0);
+
+setPortfolioValue(unclaimedWins + pendingStake);
+
 setCash(summaryData.total_claimed);
 
       } catch (err) {
@@ -205,12 +252,7 @@ setCash(summaryData.total_claimed);
   /* -------------------------
      UI Rendering
   -------------------------- */
-  if (loading)
-    return (
-      <div className="container mx-auto p-6 text-neutral-400">
-        Loading profile…
-      </div>
-    );
+  if (loading) return <ProfileSkeleton />;
 
   if (error)
     return (
@@ -281,11 +323,15 @@ setCash(summaryData.total_claimed);
       {/* Main content */}
 <div className="px-6 grid grid-cols-1 md:grid-cols-3 gap-4">
   <div className="md:col-span-2 space-y-4">
-    <WinLossChart wins={wins} losses={losses} />
+    <UserPerformanceAnalytics bets={bets} />
 
   <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
   <h3 className="text-base font-semibold mb-2">Recent Bets</h3>
-  <BetHistoryList bets={bets} marketTitles={marketTitles} />
+ <BetHistoryList
+  bets={bets}
+  marketTitles={marketTitles}
+  marketIds={marketIds}
+/>
 </div>
   </div>
 

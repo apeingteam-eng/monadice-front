@@ -62,16 +62,20 @@ export default function Hero({ markets }: { markets: MarketSummary[] }) {
           </div>
         </div>
 
-        {/* ---------------- RIGHT SIDE (3D CARD) ---------------- */}
-        <div className="
-          w-full 
-          md:w-[60%]
-          flex justify-center md:justify-end
-        ">
-          <div className="w-full max-w-[420px]">
-            <TopMarketHighlight markets={markets} />
-          </div>
-        </div>
+      
+       {/* ---------------- RIGHT SIDE (3D CARD) ---------------- */}
+<div
+  className="
+    w-full 
+    md:w-[60%]
+    flex justify-center md:justify-end
+    mt-20 md:mt-0   /* ✅ Added: space on mobile, none on desktop */
+  "
+>
+  <div className="w-full max-w-[420px]">
+    <TopMarketHighlight markets={markets} />
+  </div>
+</div>
 
       </div>
     </section>

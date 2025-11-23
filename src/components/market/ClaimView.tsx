@@ -50,7 +50,7 @@ const [claimedAmount, setClaimedAmount] = useState<number>(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [winningTickets, setWinningTickets] = useState<Ticket[]>([]);
   const [totalPayout, setTotalPayout] = useState<number>(0);
-
+const [claiming, setClaiming] = useState(false);
   /* --------------------------- Load All Data --------------------------- */
   useEffect(() => {
     
@@ -208,53 +208,74 @@ owned.push({
  /* ------------------------------ Claim All ------------------------------ */
 async function claimAll() {
   try {
-    // 🔥 Recompute payout values here (so ClaimView has everything locally)
+    setClaiming(true);
+    toast.info("Processing your winning tickets…");
+
     const provider = new JsonRpcProvider(CHAIN.rpcUrl);
     const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-    const totalTrue: bigint = await contract.totalTrue();
-    const totalFalse: bigint = await contract.totalFalse();
-    const totalInitialPot: bigint = await contract.totalInitialPot();
-    const feeBps: bigint = await contract.feeBps();
+    const totalTrue = Number(await contract.totalTrue()) / 1e6;
+    const totalFalse = Number(await contract.totalFalse()) / 1e6;
+    const totalInitialPot = Number(await contract.totalInitialPot()) / 1e6;
+    const feeBps = Number(await contract.feeBps());
 
-    const pool =
-      Number(totalTrue) / 1e6 +
-      Number(totalFalse) / 1e6 +
-      Number(totalInitialPot) / 1e6;
-
-    const fee = pool * Number(feeBps) / 10000;
+    const pool = totalTrue + totalFalse + totalInitialPot;
+    const fee = (pool * feeBps) / 10000;
     const distributable = pool - fee;
 
-    // Winners total
-    const winnersTot =
-      outcomeTrue
-        ? Number(totalTrue) / 1e6
-        : Number(totalFalse) / 1e6;
+    const winnersTot = outcomeTrue ? totalTrue : totalFalse;
 
     for (const t of winningTickets) {
-      // 1️⃣ Claim on-chain
-      const tx = await writeContractAsync({
-        address: campaignAddress,
-        abi: BetCampaignABI,
-        functionName: "claim",
-        args: [t.id],
-      });
+      toast.info(`Claiming ticket #${t.id}…`);
 
-      toast.success(`Claimed ticket #${t.id}`);
+      // 1️⃣ SEND TX
+      let tx;
+      try {
+        tx = await writeContractAsync({
+          address: campaignAddress,
+          abi: BetCampaignABI,
+          functionName: "claim",
+          args: [t.id],
+        });
+      } catch (err: any) {
+        const msg = String(err?.message || err?.shortMessage || err);
 
-      const txHash = tx;
+        const userCancelled =
+          msg.includes("User rejected") ||
+          msg.includes("User denied") ||
+          msg.includes("ACTION_REJECTED") ||
+          msg.includes("RejectedByUser") ||
+          err?.name === "UserRejectedRequestError";
 
-      // 2️⃣ Compute payout for this ticket
+        if (userCancelled) {
+          toast.error("Transaction cancelled by user.");
+        } else {
+          toast.error("Transaction failed.");
+        }
+
+        setClaiming(false);
+        return;
+      }
+
+      toast.info(`Waiting for confirmation of ticket #${t.id}…`);
+
+      // 2️⃣ WAIT FOR CONFIRMATION
+      const receipt = await provider.waitForTransaction(tx, 1);
+
+      if (!receipt || receipt.status !== 1) {
+        toast.error(`On-chain failure for ticket #${t.id}`);
+        continue;
+      }
+
+      // 3️⃣ Compute payout
       const payout =
-        winnersTot > 0
-          ? (t.stake * distributable) / winnersTot
-          : 0;
+        winnersTot > 0 ? (t.stake * distributable) / winnersTot : 0;
 
-      // 3️⃣ Save to backend
+      // 4️⃣ SAVE CLAIM IN BACKEND
       try {
         const token = localStorage.getItem("access_token");
 
-        const saveRes = await fetch(
+        const save = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/bet/claim`,
           {
             method: "POST",
@@ -266,26 +287,29 @@ async function claimAll() {
               campaign_address: campaignAddress,
               ticket_id: t.id,
               payout,
-              tx_hash: txHash,
+              tx_hash: receipt.hash,
             }),
           }
         );
 
-        if (!saveRes.ok) {
-          const errText = await saveRes.text();
-          console.error("Backend claim error:", errText);
-          toast.error(`Could not save claim for #${t.id}`);
+        if (!save.ok) {
+          toast.error(`Saved on-chain but backend failed (#${t.id}).`);
+        } else {
+          toast.success(`Ticket #${t.id} claimed!`);
         }
       } catch (err) {
-        console.error("Claim save error:", err);
+        console.error(err);
+        toast.error(`Backend error for #${t.id}`);
       }
     }
 
-    toast.success("All claims completed!");
+    toast.success("All winning tickets claimed!");
     loadAll();
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Claim failed";
-    toast.error(message);
+  } catch (err) {
+    console.error(err);
+    toast.error("Claim failed.");
+  } finally {
+    setClaiming(false);
   }
 }
   /* ------------------------------- Render ------------------------------- */
@@ -384,26 +408,101 @@ console.log("🟪 RENDER FLAGS", {
     );
   }
 // ---- USER ALREADY CLAIMED (backend tells the truth) ----
-const backendClaims = backendBets.filter((b: BackendBet) => b.claimed);
+/* ---------------------------------------
+   CASE 2: Some claimed, some unclaimed
+---------------------------------------- */
 
-if (backendClaims.length > 0) {
+const backendClaims = backendBets.filter((b) => b.claimed);
+const unclaimedWins = winningTickets.filter((t) =>
+  !backendClaims.some((b) => b.ticket_id === t.id)
+);
+
+if (backendClaims.length > 0 && unclaimedWins.length > 0) {
+  const remainingPayout = totalPayout;             // unclaimed value
+  const claimedPayout = claimedAmount;             // from backend
+  const totalCombined = claimedPayout + remainingPayout;
+
   return (
-    <div className="border border-accentPurple/40 bg-accentPurple/10 p-4 rounded-lg">
-      <p className="text-accentPurple font-semibold text-lg">
-        You already claimed your winning bets.
-      </p>
+    <div className="border border-accentPurple/60 bg-accentPurple/10 p-5 rounded-lg space-y-5 shadow-[0_0_20px_rgba(155,93,229,0.25)]">
 
-      <p className="text-neutral-300 text-sm mt-1">
-        Total claimed:{" "}
+      <h3 className="text-accentPurple text-lg font-semibold">
+        You have unclaimed rewards!
+      </h3>
+
+      {/* CLAIMED SECTION */}
+      <div className="text-sm text-neutral-300 space-y-1">
+        <p>
+          <span className="text-neutral-500">Already claimed:</span>{" "}
+          <span className="font-mono text-neutral-300">
+            {backendClaims.map((b) => `#${b.ticket_id}`).join(", ")}
+          </span>
+        </p>
+
+        <p>
+          Claimed payout:{" "}
+          <span className="text-green-400 font-semibold">
+            ${claimedPayout.toFixed(2)}
+          </span>
+        </p>
+      </div>
+
+      {/* UNCLAIMED SECTION */}
+      <div className="text-sm text-neutral-300 space-y-1">
+        <p>
+          <span className="text-neutral-500">Unclaimed tickets:</span>{" "}
+          <span className="font-mono text-accentPurple font-bold">
+            {unclaimedWins.map((t) => `#${t.id}`).join(", ")}
+          </span>
+        </p>
+
+        <p>
+          Remaining payout:{" "}
+          <span className="text-accentPurple font-bold">
+            ${remainingPayout.toFixed(2)}
+          </span>
+        </p>
+
+        {/* OPTIONAL: per-ticket payout */}
+        <div className="mt-1 text-xs text-neutral-400">
+          {unclaimedWins.map((t) => (
+            <p key={t.id}>
+              Ticket #{t.id}:{" "}
+              <span className="text-accentPurple">
+                ${(
+                  (t.stake * (remainingPayout / t.stake)) /
+                  unclaimedWins.length
+                ).toFixed(2)}
+              </span>
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {/* TOTAL */}
+      <div className="text-sm text-neutral-300">
+        Total earned (claimed + remaining):{" "}
         <span className="text-accentPurple font-bold">
-          ${claimedAmount.toFixed(2)}
+          ${totalCombined.toFixed(2)}
         </span>
-      </p>
+      </div>
 
-      <p className="text-neutral-400 text-xs mt-2">
-        Tickets:{" "}
-        {backendClaims.map((b: BackendBet) => `#${b.ticket_id}`).join(", ")}
-      </p>
+      <button
+  onClick={claimAll}
+  disabled={claiming}
+  className={`
+    w-full py-2 mt-2 rounded-md
+    text-white font-medium
+    transition
+    ${claiming
+      ? "bg-accentPurple/50 cursor-not-allowed"
+      : "bg-accentPurple hover:bg-accentPurple/80"
+    }
+  `}
+>
+  {claiming ? "Claiming…" : "Claim Remaining Rewards"}
+</button>
+        
+      
     </div>
   );
 }
@@ -451,15 +550,20 @@ if (winningTickets.length > 0) {
       </div>
 
       <button
-        onClick={claimAll}
-        className="
-          w-full py-2 mt-2 rounded-md
-          bg-accentPurple hover:bg-accentPurple/80
-          text-white font-medium transition
-        "
-      >
-        Claim Rewards
-      </button>
+  onClick={claimAll}
+  disabled={claiming}
+  className={`
+    w-full py-2 mt-2 rounded-md
+    text-white font-medium
+    transition
+    ${claiming
+      ? "bg-accentPurple/50 cursor-not-allowed"
+      : "bg-accentPurple hover:bg-accentPurple/80"
+    }
+  `}
+>
+  {claiming ? "Claiming…" : "Claim Rewards"}
+</button>
     </div>
   );
 }

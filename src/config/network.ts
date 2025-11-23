@@ -7,7 +7,7 @@ export const NETWORKS = {
     rpcUrl: "https://sepolia.base.org",
     usdcDecimals: 6,
     addresses: {
-      FACTORY: "0x9a55436F713052B38F98E1Be0c569A078576aD57",
+      FACTORY: "0x5633ab859B7bE7748f8b7e0f20b47fE7EB4c53bD",
       USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     },
   },

@@ -33,7 +33,8 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [didAuthThisSession, setDidAuthThisSession] = useState(false);
   const [mounted, setMounted] = useState(false);
-
+const desktopSearchRef = useRef<HTMLDivElement>(null);
+const mobileSearchRef = useRef<HTMLDivElement>(null);
   const [allMarkets, setAllMarkets] = useState<MarketSummary[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -89,8 +90,12 @@ export default function Header() {
 }, [isConnected, address, hasToken, didAuthThisSession]);
   useEffect(() => {
     function outsideClick(e: MouseEvent) {
-      if (!searchBoxRef.current) return;
-      if (!searchBoxRef.current.contains(e.target as Node)) {
+      if (
+        desktopSearchRef.current &&
+        !desktopSearchRef.current.contains(e.target as Node) &&
+        mobileSearchRef.current &&
+        !mobileSearchRef.current.contains(e.target as Node)
+      ) {
         setSearchOpen(false);
       }
     }
@@ -123,14 +128,86 @@ const handleLogout = () => {
   return (
     <>
       <header className="w-full sticky top-0 z-40 border-b border-neutral-800/60 bg-black/60 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
+        <div
+  className="
+    mx-auto max-w-7xl px-4 py-3 
+    flex flex-row md:flex-row
+    items-center justify-between
+    gap-3 md:gap-4
+"
+>
           <Link href="/" className="flex items-center gap-2">
             <img src="/monadiceLogoText.png" className="h-8 object-contain" />
           </Link>
 
-          {/* SEARCH */}
-          <div className="flex-1 flex justify-center">
-            <div ref={searchBoxRef} className="relative w-full max-w-xl">
+          {/* WALLET BUTTON (mobile + desktop) */}
+          <div className="flex items-center gap-3 md:hidden">
+            <ConnectButton.Custom>
+              {({ account, chain, openConnectModal, mounted: ready }) => {
+                const connected = ready && account && chain;
+
+                if (!connected) {
+                  return (
+                    <button
+                      onClick={openConnectModal}
+                      className="
+                        relative px-4 py-2 rounded-xl text-xs font-semibold text-white
+                        bg-gradient-to-r from-[#A46CFF] via-accentPurple to-[#8A5DFF]
+                        shadow-[0_0_25px_rgba(155,93,229,0.45)]
+                        hover:shadow-[0_0_40px_rgba(155,93,229,0.8)]
+                        hover:scale-[1.02] active:scale-[0.97]
+                        transition-all
+                      "
+                    >
+                      Connect
+                    </button>
+                  );
+                }
+
+                return (
+                  <>
+                  <button
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    className="
+                      w-9 h-9 rounded-full overflow-hidden
+                      border border-neutral-700/70 shadow-[0_0_10px_rgba(140,90,255,0.25)]
+                      hover:shadow-[0_0_18px_rgba(155,93,229,0.55)]
+                      transition-all
+                    "
+                  >
+                    <img src={profileImage} className="w-full h-full object-cover" />
+                  </button>
+                  {menuOpen && (
+                    <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg z-50">
+                      <button
+                        className="w-full px-4 py-2 text-sm hover:bg-neutral-800"
+                        onClick={() => {
+                          router.push("/profile");
+                          setMenuOpen(false);
+                        }}
+                      >
+                        Profile
+                      </button>
+
+                      <button
+                        className="w-full px-4 py-2 text-sm text-red-400 hover:bg-neutral-800"
+                        onClick={handleLogout}
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                  </>
+                );
+              }}
+            </ConnectButton.Custom>
+          </div>
+
+          <div className="hidden md:flex md:flex-1 justify-center">
+            <div
+  ref={desktopSearchRef}
+  className="relative w-full md:max-w-xl"
+>
              <input
   value={query}
   onChange={(e) => setQuery(e.target.value)}
@@ -140,12 +217,18 @@ const handleLogout = () => {
 />
 
               <div
-                className={`absolute left-0 right-0 top-full mt-1 bg-neutral-900 border border-neutral-800 rounded-lg shadow-lg overflow-hidden transition-all ${
-                  searchOpen && query && searchResults.length > 0
-                    ? "opacity-100 pointer-events-auto"
-                    : "opacity-0 pointer-events-none"
-                }`}
-              >
+  className={`
+    absolute left-0 right-0 top-full mt-1 
+    bg-neutral-900 border border-neutral-800 
+    rounded-lg shadow-lg overflow-auto
+    max-h-[300px]   /* <-- added */
+    transition-all
+    ${searchOpen && query && searchResults.length > 0
+      ? "opacity-100 pointer-events-auto"
+      : "opacity-0 pointer-events-none"
+    }
+  `}
+>
                 {searchResults.map((m) => (
                   <div
                     key={m.id}
@@ -164,19 +247,26 @@ const handleLogout = () => {
           </div>
 
           {/* WALLET / MENU */}
-          <div className="ml-auto flex items-center gap-3 relative">
+          <div className="hidden md:flex items-center gap-3 relative">
             <ConnectButton.Custom>
               {({ account, chain, openConnectModal, mounted: ready }) => {
                 const connected = ready && account && chain;
 
                 if (!connected) {
                   return (
-                    <button
-                      onClick={openConnectModal}
-                      className="bg-accentPurple px-3 py-2 rounded text-xs text-white"
-                    >
-                      Connect Wallet
-                    </button>
+                   <button
+  onClick={openConnectModal}
+  className="
+    relative px-4 py-2 rounded-xl text-xs font-semibold text-white
+    bg-gradient-to-r from-[#A46CFF] via-accentPurple to-[#8A5DFF]
+    shadow-[0_0_25px_rgba(155,93,229,0.45)]
+    hover:shadow-[0_0_40px_rgba(155,93,229,0.8)]
+    hover:scale-[1.02] active:scale-[0.97]
+    transition-all
+  "
+>
+  Connect Wallet
+</button>
                   );
                 }
 
@@ -184,15 +274,19 @@ const handleLogout = () => {
                   <>
                     <span className="text-xs">{account.address.slice(0, 6)}…{account.address.slice(-4)}</span>
 
-                    <button
-                      onClick={() => setMenuOpen(!menuOpen)}
-                      className="w-8 h-8 rounded-full border border-neutral-700"
-                    >
-                      <img src={profileImage} className="w-full h-full object-cover" />
-                    </button>
-
+                  <button
+  onClick={() => setMenuOpen(!menuOpen)}
+  className="
+    w-9 h-9 rounded-full overflow-hidden
+    border border-neutral-700/70 shadow-[0_0_10px_rgba(140,90,255,0.25)]
+    hover:shadow-[0_0_18px_rgba(155,93,229,0.55)]
+    transition-all
+  "
+>
+  <img src={profileImage} className="w-full h-full object-cover" />
+</button>
                     {menuOpen && (
-                      <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg">
+                      <div className="absolute right-0 top-11 w-40 bg-neutral-900 border border-neutral-700 rounded-lg z-50">
                         <button
                           className="w-full px-4 py-2 text-sm hover:bg-neutral-800"
                           onClick={() => {
@@ -216,6 +310,49 @@ const handleLogout = () => {
               }}
             </ConnectButton.Custom>
           </div>
+        </div>
+
+        <div className="w-full block md:hidden mt-4 mb-3">
+          <div
+    ref={mobileSearchRef}
+    className="relative w-full max-w-[320px] mx-auto mb-3"
+  >
+             <input
+  value={query}
+  onChange={(e) => setQuery(e.target.value)}
+  onFocus={() => setSearchOpen(true)}
+  placeholder="Search markets"
+  className="w-full rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm"
+/>
+
+              <div
+    className={`
+      absolute left-0 right-0 top-full mt-1 z-50
+      bg-neutral-900 border border-neutral-800 
+      rounded-lg shadow-lg overflow-auto
+      max-h-[300px]   /* <-- added */
+      transition-all
+      ${searchOpen && query && searchResults.length > 0
+        ? "opacity-100 pointer-events-auto"
+        : "opacity-0 pointer-events-none"
+      }
+    `}
+  >
+                {searchResults.map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => {
+                      router.push(`/market/${m.id}`);
+                      setSearchOpen(false);
+                    }}
+                    className="px-4 py-2 text-sm text-neutral-200 hover:bg-neutral-800 cursor-pointer"
+                  >
+                    {m.name}
+                    <span className="text-accentPurple text-xs ml-2">{m.symbol}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
         </div>
       </header>
 

@@ -7,60 +7,70 @@ type WinLossChartProps = {
 
 export default function WinLossChart({ wins, losses }: WinLossChartProps) {
   const total = wins + losses;
-  const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : "0.0";
-  const lossRate = total > 0 ? ((losses / total) * 100).toFixed(1) : "0.0";
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
 
-  // Circle math
-  const radius = 36;
+  // Gauge math
+  const radius = 50;
   const circumference = 2 * Math.PI * radius;
-  const winStroke = (Number(winRate) / 100) * circumference;
-  const lossStroke = circumference - winStroke;
+  const winStroke = (winRate / 100) * circumference;
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-center">
-      <h3 className="text-base font-semibold mb-3 text-white">Performance</h3>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6 text-center">
+      <h3 className="text-lg font-semibold mb-4 text-white">Performance</h3>
 
       <div className="flex flex-col items-center">
-        <svg width="100" height="100" className="-rotate-90">
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke="rgb(64,64,64)"
-            strokeWidth="10"
-            fill="transparent"
-          />
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke="url(#winGradient)"
-            strokeWidth="10"
-            strokeDasharray={`${winStroke} ${lossStroke}`}
-            strokeLinecap="round"
-            fill="transparent"
-          />
-          <defs>
-            <linearGradient id="winGradient" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#9b5de5" />
-              <stop offset="100%" stopColor="#7a4edb" />
-            </linearGradient>
-          </defs>
-        </svg>
+        <div className="relative w-40 h-40">
+          <svg className="w-full h-full -rotate-90">
+            {/* Background circle */}
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              stroke="rgb(45,45,45)"
+              strokeWidth="12"
+              fill="transparent"
+            />
 
-        <div className="-mt-16 text-2xl font-bold text-accentPurple">
-          {winRate}%
-        </div>
-        <p className="text-xs text-neutral-400 mb-3">Win Rate</p>
+            {/* Win arc */}
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              stroke="url(#winGradient)"
+              strokeWidth="12"
+              strokeDasharray={`${winStroke} ${circumference - winStroke}`}
+              strokeLinecap="round"
+              fill="transparent"
+              className="transition-all duration-700 ease-out"
+            />
 
-        <div className="flex justify-center gap-6 text-sm text-neutral-300">
-          <div>
-            <div className="text-accentPurple text-lg font-semibold">{wins}</div>
-            <div>Wins</div>
+            <defs>
+              <linearGradient id="winGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#9b5de5" />
+                <stop offset="100%" stopColor="#7a4edb" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          {/* Center Text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-3xl font-bold text-accentPurple">
+              {winRate.toFixed(1)}%
+            </span>
+            <span className="text-xs text-neutral-400">Win Rate</span>
           </div>
-          <div>
-            <div className="text-red-500 text-lg font-semibold">{losses}</div>
-            <div>Losses</div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex justify-center gap-14 mt-4 text-sm text-neutral-300">
+          <div className="text-center">
+            <div className="text-accentPurple text-xl font-semibold">{wins}</div>
+            <div className="text-xs text-neutral-500">Wins</div>
+          </div>
+
+          <div className="text-center">
+            <div className="text-red-500 text-xl font-semibold">{losses}</div>
+            <div className="text-xs text-neutral-500">Losses</div>
           </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ export interface UserBet {
   created_at: string;
   payout: number | null;
   tx_hash: string;
+    category?: string;
 }
 
 export async function getUserBets(): Promise<UserBet[]> {

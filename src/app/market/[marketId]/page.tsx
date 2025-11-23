@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Contract, JsonRpcProvider } from "ethers";
-
+import MarketSkeleton from "./MarketSkeleton"
 import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
 import { CHAIN } from "@/config/network";
 import PlaceBetForm from "@/components/PlaceBetForm";
@@ -135,12 +135,7 @@ useEffect(() => {
   /*                                  Rendering                                 */
   /* -------------------------------------------------------------------------- */
 
-  if (loading)
-    return (
-      <div className="container mx-auto p-6 text-neutral-400">
-        Loading market…
-      </div>
-    );
+ if (loading) return <MarketSkeleton />;
 
   if (!campaign) {
     toast.error("Market not found.");
@@ -188,7 +183,7 @@ useEffect(() => {
             background: "linear-gradient(135deg, #9b5de5 0%, #7a4edb 100%)",
           }}
         >
-          <span className="text-white/90 text-sm">Market</span>
+          <span className="text-white/90 text-sm"></span>
         </div>
       </div>
 

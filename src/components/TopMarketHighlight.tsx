@@ -166,9 +166,17 @@ export default function TopMarketHighlight({ markets }: { markets: MarketSummary
       {floatyStyle}
 
       <div
-        ref={cardRef}
-        className="relative transition-all duration-300 animate-[floaty_5s_ease-in-out_infinite]"
-      >
+  ref={cardRef}
+  className="
+    relative 
+    transition-all duration-300 
+    animate-[floaty_5s_ease-in-out_infinite]
+    scale-[0.9]       /* 🔥 smaller on mobile */
+    sm:scale-[0.90]    /* slightly larger on small tablets */
+    md:scale-100       /* full size on desktop */
+    origin-top         /* so it grows downwards */
+  "
+>
         <Link
           href={`/market/${market.id}`}
           className="
@@ -198,16 +206,16 @@ export default function TopMarketHighlight({ markets }: { markets: MarketSummary
               loop
               muted
               playsInline
-              className="
-      w-[600px]
-      h-[500px]
-      object-contain
-      opacity-90
-      translate-x-[10px]
-      translate-y-[4px]
-      max-w-none
-      pointer-events-none
-    "
+         className="
+  w-[550px] sm:w-[450px] md:w-[600px]
+  h-auto
+  object-contain
+  opacity-90
+  translate-x-[10px]
+  translate-y-[4px]
+  max-w-none
+  pointer-events-none
+"
             />
           </div>
 

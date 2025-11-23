@@ -106,6 +106,11 @@ const [participantB, setParticipantB] = useState("");
 const [sportOutcome, setSportOutcome] = useState<"beat" | "draw" | "score">("beat");
 const [scoreA, setScoreA] = useState("");
 const [scoreB, setScoreB] = useState("");
+const [draftNonce, setDraftNonce] = useState<number | null>(null);
+useEffect(() => {
+  const saved = localStorage.getItem("draft_nonce");
+  if (saved) setDraftNonce(Number(saved));
+}, []);
   /* --------------------------------- SIGNER -------------------------------- */
   useEffect(() => {
     async function setup() {
@@ -196,10 +201,16 @@ let outcomeForAPI: string = sportOutcome;
       return;
     }
 
-    toast.success("Draft verified! ✔");
-    setVerified(true);
-    setButtonStage("approve");
+   toast.success("Draft verified! ✔");
 
+// store nonce
+if (data.draft_nonce !== undefined) {
+  setDraftNonce(data.draft_nonce);
+  localStorage.setItem("draft_nonce", String(data.draft_nonce));
+}
+
+setVerified(true);
+setButtonStage("approve");
  } catch {
     toast.error("Verification failed.");
   } finally {
@@ -307,7 +318,33 @@ for (const log of receipt.logs) {
       console.error(err);
       toast.error("Points failed.");
     }
+// --- Attach Draft to Campaign ---
+if (draftNonce !== null) {
+  try {
+    const attachRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/attach-draft`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`, // 🔥 ADD THIS
+      },
+      body: JSON.stringify({
+        campaign_address: campaignAddress,
+        draft_nonce: draftNonce,
+      }),
+    });
 
+    if (!attachRes.ok) {
+      const errData = await attachRes.json();
+      console.log("Attach error:", errData);
+      toast.error(errData.detail || "Draft attach failed.");
+    } else {
+      toast.success("Draft attached to campaign ✔");
+    }
+  } catch (err) {
+    console.error("Attach draft error:", err);
+    toast.error("Could not attach draft.");
+  }
+}
   } catch (err) {
     console.error(err);
     toast.error("Create failed.");

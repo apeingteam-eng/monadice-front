@@ -181,7 +181,7 @@ setTickets(merged);
     const provider = new JsonRpcProvider(CHAIN.rpcUrl);
     const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-    // --- READ ON-CHAIN VALUES ---
+    // 1) READ ON-CHAIN VALUES
     const t = await contract.tickets(ticketId);
     const stake = Number(t.stake) / 1e6;
     const side = Number(t.side);
@@ -196,10 +196,8 @@ setTickets(merged);
     const fee = (pool * fBps) / 10000;
     const distributable = pool - fee;
 
-    // Winner group total
     const winnersTot = outcome ? tTrue : tFalse;
 
-    // FINAL TICKET PAYOUT
     let payout = 0;
     const won = outcome ? side === 1 : side === 0;
 
@@ -207,7 +205,9 @@ setTickets(merged);
       payout = (stake / winnersTot) * distributable;
     }
 
-    // --- 1️⃣ CLAIM ON-CHAIN ---
+    // -------------------------------
+    // 2) SEND CLAIM TX
+    // -------------------------------
     const txHash = await writeContractAsync({
       address: campaignAddress,
       abi: BetCampaignABI,
@@ -215,9 +215,21 @@ setTickets(merged);
       args: [ticketId],
     });
 
-    toast.success(`Claimed ticket #${ticketId}`);
+    toast.success(`Claim submitted for ticket #${ticketId}`);
 
-    // --- 2️⃣ SAVE TO BACKEND ---
+    // -------------------------------
+    // 3) WAIT FOR TRANSACTION CONFIRMATION
+    // -------------------------------
+    const receipt = await provider.waitForTransaction(txHash, 1);
+
+    if (!receipt || receipt.status !== 1) {
+      toast.error("Transaction failed on-chain.");
+      return;
+    }
+
+    // -------------------------------
+    // 4) SAVE CLAIM TO BACKEND
+    // -------------------------------
     try {
       const token = localStorage.getItem("access_token");
 
@@ -233,7 +245,7 @@ setTickets(merged);
             campaign_address: campaignAddress,
             ticket_id: ticketId,
             payout,
-            tx_hash: txHash,
+            tx_hash: receipt.hash, // ethers v6
           }),
         }
       );
@@ -244,18 +256,32 @@ setTickets(merged);
         toast.error(`Could not save claim for #${ticketId}`);
       }
     } catch (err) {
-      console.error("Claim save error:", err);
+      console.error("Error saving claim to backend:", err);
     }
 
     await load();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Claim failed";
-    toast.error(message);
-  } finally {
-    setClaimingId(null);
-  }
-}
+} catch (err: any) {
+  // --- Detect common user-cancel patterns ---
+  const msg = String(err?.message || err?.shortMessage || err);
 
+  const userCancelled =
+    msg.includes("User rejected") ||
+    msg.includes("User denied") ||
+    msg.includes("ACTION_REJECTED") ||
+    msg.includes("RejectedByUser") ||
+    msg.includes("User canceled") ||
+    err?.name === "UserRejectedRequestError";
+
+  if (userCancelled) {
+    toast.error("Transaction cancelled by user.");
+  } else {
+    toast.error("Claim failed. Please try again.");
+    console.error("Claim error:", err);
+  }
+} finally {
+  setClaimingId(null);
+}
+}
   /* ------------------------------- UI ------------------------------- */
 
   if (loading) return <p className="text-neutral-400">Loading tickets...</p>;

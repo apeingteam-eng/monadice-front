@@ -80,21 +80,22 @@ useEffect(() => {
   /* --------------------------------- UI ---------------------------------- */
   return (
     <>
-      <Hero markets={markets} />
+      <div className="relative z-0 overflow-hidden">
+        <Hero markets={markets} />
+      </div>
       <div className="container mx-auto p-6">
         <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold">Markets</h1>
             <p className="text-xs text-neutral-400">
-              Search or filter markets by name, status, or category
+              Filter markets by status, or category
             </p>
           </div>
 
           {/* FILTERS */}
-          <div className="flex flex-col lg:flex-row gap-3">
-
+<div className="flex flex-col lg:flex-row gap-3 w-full">
             {/* STATUS FILTER */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1 flex-nowrap">
               {["All", "Running", "Pending", "Ended"].map((f) => (
                 <button
                   key={f}
@@ -117,7 +118,7 @@ useEffect(() => {
             <div className="hidden lg:block w-px bg-neutral-700"></div>
 
             {/* CATEGORY FILTER */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1 flex-nowrap">
               {["All", "SPORTS", "CRYPTO", "POLITICS", "SOCIAL"].map((cat) => (
                 <button
                   key={cat}
