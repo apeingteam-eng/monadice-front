@@ -2,45 +2,75 @@
 
 import React from 'react';
 import '@rainbow-me/rainbowkit/styles.css';
+
 import {
   RainbowKitProvider,
   getDefaultWallets,
   darkTheme,
 } from '@rainbow-me/rainbowkit';
+
 import {
   WagmiProvider,
   createConfig,
   http,
 } from 'wagmi';
-import { baseSepolia } from 'wagmi/chains';
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// --- WalletConnect project id (from https://cloud.walletconnect.com) ---
+// ---------------------------------------------
+// 🚀 Monad Mainnet Chain
+// ---------------------------------------------
+const monadMainnet = {
+  id: 143,
+  name: "Monad",
+  network: "monad-mainnet",
+  nativeCurrency: {
+    name: "Monad",
+    symbol: "MON",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { http: ["https://rpc.monad.xyz"] },
+    public: { http: ["https://rpc.monad.xyz"] },
+  },
+  blockExplorers: {
+    default: {
+      name: "MonadVision",
+      url: "https://monadvision.com",
+    },
+  },
+} as const;
+
+// ---------------------------------------------
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? 'demo';
 
-// --- RainbowKit wallets setup ---
+// Wallet connectors
 const { wallets, connectors } = getDefaultWallets({
-  appName: 'Monadice',
+  appName: "Monadice",
   projectId,
 });
 
-// --- wagmi configuration (v2 syntax) ---
+// Wagmi Config (v2)
 const config = createConfig({
-  chains: [baseSepolia],
+  chains: [monadMainnet],
   connectors,
   transports: {
-    [baseSepolia.id]: http(), // public RPC by default
+    [monadMainnet.id]: http("https://rpc.monad.xyz"),
   },
 });
 
+// Queries
 const queryClient = new QueryClient();
 
-// --- Global provider wrapper ---
+// ---------------------------------------------
+// 🌍 Global Providers
+// ---------------------------------------------
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={darkTheme()} locale="en">
+        {/* ❌ REMOVE chains prop — RainbowKit v2 does NOT accept it */}
+        <RainbowKitProvider theme={darkTheme()}>
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>

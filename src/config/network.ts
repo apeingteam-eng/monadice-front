@@ -7,8 +7,8 @@ export const NETWORKS = {
     rpcUrl: "https://sepolia.base.org",
     usdcDecimals: 6,
     addresses: {
-      FACTORY: "0x5633ab859B7bE7748f8b7e0f20b47fE7EB4c53bD",
-      USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      FACTORY: "",
+      USDC: "",
     },
   },
 
@@ -25,13 +25,13 @@ export const NETWORKS = {
   },
 
   monadMainnet: {
-    chainId: 99999,
+    chainId: 143,
     name: "monad-mainnet",
     rpcUrl: "https://rpc.monad.xyz",
     usdcDecimals: 6,
     addresses: {
-      FACTORY: "",
-      USDC: "",
+      FACTORY: "0x16Cc5deD2ABC64465C277370036c291B0F1DB898",
+      USDC: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
     },
   },
 } as const;
@@ -39,7 +39,7 @@ export const NETWORKS = {
 export type SupportedNetwork = keyof typeof NETWORKS;
 
 // Pick the active network here:
-export const ACTIVE_NETWORK: SupportedNetwork = "baseSepolia";
+export const ACTIVE_NETWORK: SupportedNetwork = "monadMainnet";
 
 // Export active chain config everywhere:
 export const CHAIN = NETWORKS[ACTIVE_NETWORK];
