@@ -140,64 +140,42 @@ useEffect(() => {
   }, [signer, address]);
 
   /* ----------------------------- VERIFY CAMPAIGN --------------------------- */
-  const handleVerify = async () => {
+const handleVerify = async () => {
   if (!accessToken) return toast.error("Please log in to create a market.");
   if (!selectedDate) return toast.error("Select an end date.");
   if (!address) return toast.error("Connect your wallet.");
-    // 🚫 Skip verification for POLITICS & SOCIAL
-    if (category === "POLITICS" || category === "SOCIAL") {
-      setVerified(true);
-      setButtonStage("approve");
-      toast.success("No verification required for this category ✔");
-      return;
-    }
+
+  // 🚫 Skip verification for ALL non-crypto categories
+  if (category !== "CRYPTO") {
+    setVerified(true);
+    setButtonStage("approve");
+    toast.success("No verification required for this category ✔");
+    return;
+  }
+
+  // ---------------------------
+  // Only CRYPTO verification here
+  // ---------------------------
+  if (!title.trim()) return toast.error("Enter a market title.");
+
   setLoading(true);
 
   try {
-    let body;
-    let url;
+    const body = {
+      title,
+      end_time: selectedDate.toISOString(),
+      user_wallet: address,
+      category: "crypto",
+    };
 
-    if (category === "SPORTS") {
-      if (!participantA.trim()) return toast.error("Enter name for Participant A.");
-      if (!participantB.trim()) return toast.error("Enter name for Participant B.");
-
-let outcomeForAPI: string = sportOutcome;
-      if (sportOutcome === "score") {
-        outcomeForAPI = `${scoreA}-${scoreB}`;
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/verify-campaign/`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       }
-
-      body = {
-        team_a: participantA,
-        team_b: participantB,
-        outcome: outcomeForAPI,
-        user_wallet: address,
-        end_time: selectedDate.toISOString(),
-      };
-
-      url = `${process.env.NEXT_PUBLIC_API_URL}/verify-sports-campaign/`;
-    } 
-    else {
-      // CRYPTO, POLITICS, SOCIAL (existing)
-      if (category !== "SPORTS" && !title.trim()) {
-  return toast.error("Enter a market title.");
-}
-
-      body = {
-        title,
-        end_time: selectedDate.toISOString(),
-        user_wallet: address,
-        category: category.toLowerCase(),
-      };
-
-      url = `${process.env.NEXT_PUBLIC_API_URL}/verify-campaign/`;
-    }
-
-    toast.info("Verifying market…");
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    );
 
     const data = await res.json();
 
@@ -207,17 +185,16 @@ let outcomeForAPI: string = sportOutcome;
       return;
     }
 
-   toast.success("Draft verified! ✔");
+    toast.success("Draft verified! ✔");
 
-// store nonce
-if (data.draft_nonce !== undefined) {
-  setDraftNonce(data.draft_nonce);
-  localStorage.setItem("draft_nonce", String(data.draft_nonce));
-}
+    if (data.draft_nonce !== undefined) {
+      setDraftNonce(data.draft_nonce);
+      localStorage.setItem("draft_nonce", String(data.draft_nonce));
+    }
 
-setVerified(true);
-setButtonStage("approve");
- } catch {
+    setVerified(true);
+    setButtonStage("approve");
+  } catch {
     toast.error("Verification failed.");
   } finally {
     setLoading(false);
@@ -324,8 +301,9 @@ for (const log of receipt.logs) {
       console.error(err);
       toast.error("Points failed.");
     }
-// --- Attach Draft to Campaign ---
-if (draftNonce !== null) {
+
+// --- Attach Draft to Campaign (CRYPTO ONLY) ---
+if (category === "CRYPTO" && draftNonce !== null) {
   try {
     const attachRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/attach-draft`, {
       method: "POST",
@@ -402,8 +380,10 @@ return (
       value={title}
       onChange={(e) => {
         setTitle(e.target.value);
-        setVerified(null);
-        setButtonStage("verify");
+       if (category === "CRYPTO") {
+  setVerified(null);
+  setButtonStage("verify");
+}
       }}
       placeholder="e.g. BTC above 100K?"
       className="
@@ -430,8 +410,7 @@ return (
                   value={participantA}
                   onChange={(e) => {
                     setParticipantA(e.target.value);
-                    setVerified(null);
-                    setButtonStage("verify");
+                 
                   }}
                   placeholder="e.g. Barcelona, UFC Fighter"
                   className="
@@ -453,8 +432,7 @@ return (
                   value={participantB}
                   onChange={(e) => {
                     setParticipantB(e.target.value);
-                    setVerified(null);
-                    setButtonStage("verify");
+                   
                   }}
                   placeholder="e.g. Chelsea, UFC Fighter"
                   className="
@@ -478,8 +456,7 @@ return (
     value={sportOutcome}
     onChange={(v) => {
       setSportOutcome(v as "beat" | "draw" | "score");
-      setVerified(null);
-      setButtonStage("verify");
+     
     }}
     options={["beat", "draw", "score"]}
   />
@@ -540,14 +517,15 @@ return (
   setCategory(v);
 
   // reset verification only for categories that require verification
-  if (v === "CRYPTO" || v === "SPORTS") {
-    setVerified(null);
-    setButtonStage("verify");
-  } else {
-    // POLITICS / SOCIAL → skip verify step
-    setVerified(true);
-    setButtonStage("approve");
-  }
+ if (v === "CRYPTO") {
+  // Crypto requires verification
+  setVerified(null);
+  setButtonStage("verify");
+} else {
+  // SPORTS, POLITICS, SOCIAL skip verification
+  setVerified(true);
+  setButtonStage("approve");
+}
 }}
     options={["CRYPTO", "SPORTS", "POLITICS", "SOCIAL"]}
   />
@@ -562,8 +540,10 @@ return (
   selected={selectedDate}
   onChange={(d) => {
     setSelectedDate(d);
-    setVerified(null);
-    setButtonStage("verify");
+   if (category === "CRYPTO") {
+  setVerified(null);
+  setButtonStage("verify");
+}
   }}
   showTimeSelect
   timeIntervals={5}

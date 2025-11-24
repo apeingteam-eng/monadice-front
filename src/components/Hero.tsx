@@ -72,7 +72,7 @@ export default function Hero({ markets }: { markets: MarketSummary[] }) {
     transition
   "
 >
-  {comingSoon ? "Coming soon…" : "Explore Markets"}
+  {comingSoon ? "Coming soon…" : "Trade Tickets"}
 </button>
           </div>
         </div>

@@ -30,7 +30,7 @@ export const NETWORKS = {
     rpcUrl: "https://rpc.monad.xyz",
     usdcDecimals: 6,
     addresses: {
-      FACTORY: "0x16Cc5deD2ABC64465C277370036c291B0F1DB898",
+      FACTORY: "0xeBfbE5f4EDB6378ade8A815Fc2DAf147C5b8Cb86",
       USDC: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
     },
   },
