@@ -260,9 +260,13 @@ setTickets(merged);
     }
 
     await load();
-} catch (err: any) {
-  // --- Detect common user-cancel patterns ---
-  const msg = String(err?.message || err?.shortMessage || err);
+} catch (err) {
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+      ? err
+      : "Unknown error";
 
   const userCancelled =
     msg.includes("User rejected") ||
@@ -270,7 +274,7 @@ setTickets(merged);
     msg.includes("ACTION_REJECTED") ||
     msg.includes("RejectedByUser") ||
     msg.includes("User canceled") ||
-    err?.name === "UserRejectedRequestError";
+    (err instanceof Error && err.name === "UserRejectedRequestError");
 
   if (userCancelled) {
     toast.error("Transaction cancelled by user.");

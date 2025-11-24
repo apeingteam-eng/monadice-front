@@ -237,15 +237,19 @@ async function claimAll() {
           functionName: "claim",
           args: [t.id],
         });
-      } catch (err: any) {
-        const msg = String(err?.message || err?.shortMessage || err);
+      } catch (err) {
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+      ? err
+      : "Unknown error";
 
-        const userCancelled =
-          msg.includes("User rejected") ||
-          msg.includes("User denied") ||
-          msg.includes("ACTION_REJECTED") ||
-          msg.includes("RejectedByUser") ||
-          err?.name === "UserRejectedRequestError";
+       const userCancelled =
+    msg.includes("User rejected") ||
+    msg.includes("User denied") ||
+    msg.includes("ACTION_REJECTED") ||
+    msg.includes("RejectedByUser");
 
         if (userCancelled) {
           toast.error("Transaction cancelled by user.");
