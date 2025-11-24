@@ -7,10 +7,10 @@ import type { Eip1193Provider } from "ethers";
 
 import { ERC20ABI, BetCampaignABI } from "@/lib/ethers/abi";
 import { useToast } from "@/components/toast/ToastContext";
-
-const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+import { CHAIN } from "@/config/network";
+const USDC_ADDRESS = CHAIN.addresses.USDC;
 const USDC_DECIMALS = 6;
-const TARGET_CHAIN_ID = 84532;
+const TARGET_CHAIN_ID = CHAIN.chainId;
 
 type Props = {
   campaignAddress: string;
