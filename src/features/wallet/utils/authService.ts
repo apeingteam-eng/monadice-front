@@ -61,19 +61,17 @@ export async function verifySignature(
 }
 
 // 3️⃣ Create a new user (username + optional referral)
-// 3️⃣ Create a new user (username + optional referral)
-// 3️⃣ Create a new user (username + optional referral)
 export async function createUser(
   walletAddress: string,
   username: string,
-  refCode?: string | null  //  ⭐ accept optional 3rd arg
+  refCode?: string | null
 ): Promise<CreateUserResponse> {
 
   const res = await api.post<CreateUserResponse>("/auth/create-user", null, {
     params: {
       wallet_address: walletAddress,
       username,
-      ref_code_used: refCode || null,   // ⭐ send if exists
+      ref_code_used: refCode ?? null,   // ⭐ send ref code when present
     },
   });
 

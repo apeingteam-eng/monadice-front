@@ -34,7 +34,7 @@ export default function CreateUserModal({
       setError(null);
 
       // Send username + auto referral
-      const res = await createUser(walletAddress, username);
+      const res = await createUser(walletAddress, username, refCode);
 
       localStorage.setItem("access_token", res.access_token);
       localStorage.setItem("wallet_address", walletAddress);
