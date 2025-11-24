@@ -4,8 +4,15 @@
 import Link from "next/link";
 import TopMarketHighlight from "@/components/TopMarketHighlight";
 import type { MarketSummary } from "@/components/MarketCard";
+import { useState } from "react";
 
 export default function Hero({ markets }: { markets: MarketSummary[] }) {
+    const [comingSoon, setComingSoon] = useState(false);
+ const handleExploreClick = (e: React.MouseEvent) => {
+    e.preventDefault(); // stop navigation
+    setComingSoon(true);
+    setTimeout(() => setComingSoon(false), 2000); // reset after 2s
+  };
   return (
 <section className="relative w-full overflow-hidden py-16 px-6 md:px-12 lg:px-30">
 
@@ -56,17 +63,17 @@ export default function Hero({ markets }: { markets: MarketSummary[] }) {
 </Link>
 
             {/* Secondary CTA */}
-            <Link
-              href="/"
-              className="
-                px-6 py-4 rounded-xl text-sm font-medium
-                border border-neutral-700 bg-neutral-900
-                text-neutral-200 hover:border-accentPurple/40
-                transition
-              "
-            >
-              Explore Markets
-            </Link>
+            <button
+  onClick={handleExploreClick}
+  className="
+    px-6 py-4 rounded-xl text-sm font-medium
+    border border-neutral-700 bg-neutral-900
+    text-neutral-200 hover:border-accentPurple/40
+    transition
+  "
+>
+  {comingSoon ? "Coming soon…" : "Explore Markets"}
+</button>
           </div>
         </div>
 
