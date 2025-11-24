@@ -26,7 +26,7 @@ type Campaign = {
   creation_stake: number;
   tx_hash: string;
   deployed_at: string;
-
+outcome_true: number;
   // Backend-calculated stats (NEW)
   totalTrue: number;
   totalFalse: number;
@@ -208,7 +208,22 @@ useEffect(() => {
           </div>
 
           <h1 className="text-2xl font-semibold">{campaign.name}</h1>
+{/* FINAL OUTCOME (Only when campaign is resolved) */}
+{campaign.resolved && (
+  <div className="flex items-center gap-2 mt-2">
+    <span className="text-sm text-neutral-500">Final Outcome:</span>
 
+    {campaign.outcome_true ? (
+      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
+        YES
+      </span>
+    ) : (
+      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+        NO
+      </span>
+    )}
+  </div>
+)}
           <p className="text-sm text-neutral-600 dark:text-neutral-400">
             Market created by{" "}
             <span className="font-mono text-accentPurple">

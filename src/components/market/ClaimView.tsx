@@ -52,12 +52,13 @@ const [claimedAmount, setClaimedAmount] = useState<number>(0);
   const [totalPayout, setTotalPayout] = useState<number>(0);
 const [claiming, setClaiming] = useState(false);
   /* --------------------------- Load All Data --------------------------- */
-  useEffect(() => {
-    
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignAddress, address]);
-
+useEffect(() => {
+  if (!address) {
+    setLoading(false); // ⛔ make sure loading stops if not logged in
+    return;
+  }
+  loadAll();
+}, [campaignAddress, address]);
   async function loadAll() {
     if (!address) return;
 
@@ -316,19 +317,21 @@ async function claimAll() {
     setClaiming(false);
   }
 }
-  /* ------------------------------- Render ------------------------------- */
-  if (loading) {
-    return <p className="text-neutral-400">Loading claim data...</p>;
-  }
-
-  if (!address) {
-    return (
-      <p className="text-neutral-500">
-        Connect wallet to view claim status.
+// 1️⃣ User not logged in → show login notice, not loading
+if (!address) {
+  return (
+    <div className="border border-neutral-700 bg-neutral-900 p-4 rounded-lg">
+      <p className="text-neutral-400 text-center">
+        Login to see your results.
       </p>
-    );
-  }
+    </div>
+  );
+}
 
+// 2️⃣ Loading only when connected
+if (loading) {
+  return <p className="text-neutral-400">Loading claim data...</p>;
+}
   if (state === null || outcomeTrue === null) {
     return (
       <div className="border border-neutral-700 bg-neutral-900 p-4 rounded-lg">
@@ -510,6 +513,35 @@ if (backendClaims.length > 0 && unclaimedWins.length > 0) {
     </div>
   );
 }
+  /* ------------------------------ FULLY CLAIMED ------------------------------ */
+  // If user had winning tickets but all of them are already claimed (backend truth)
+  if (backendClaims.length > 0 && winningTickets.length === 0) {
+    const totalClaimed = claimedAmount; // already claimed from backend
+
+    return (
+      <div className="border border-accentPurple/60 bg-accentPurple/10 p-5 rounded-lg space-y-4 shadow-[0_0_20px_rgba(155,93,229,0.25)]">
+        <h3 className="text-accentPurple text-lg font-semibold">
+          You already claimed your rewards 🎉
+        </h3>
+
+        <div className="text-sm text-neutral-300 space-y-1">
+          <p>
+            Claimed tickets:{" "}
+            <span className="font-mono text-accentPurple font-semibold">
+              {backendClaims.map((b) => `#${b.ticket_id}`).join(", ")}
+            </span>
+          </p>
+
+          <p>
+            Total payout:{" "}
+            <span className="text-green-400 font-bold">
+              ${totalClaimed.toFixed(2)}
+            </span>
+          </p>
+        </div>
+      </div>
+    );
+  }
   /* ------------------------------ LOST ------------------------------ */
   if (winningTickets.length === 0) {
     return (

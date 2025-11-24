@@ -144,7 +144,13 @@ useEffect(() => {
   if (!accessToken) return toast.error("Please log in to create a market.");
   if (!selectedDate) return toast.error("Select an end date.");
   if (!address) return toast.error("Connect your wallet.");
-
+    // 🚫 Skip verification for POLITICS & SOCIAL
+    if (category === "POLITICS" || category === "SOCIAL") {
+      setVerified(true);
+      setButtonStage("approve");
+      toast.success("No verification required for this category ✔");
+      return;
+    }
   setLoading(true);
 
   try {
@@ -531,10 +537,18 @@ return (
   <CustomDropdown
     value={category}
     onChange={(v) => {
-      setCategory(v);
-      setVerified(null);
-      setButtonStage("verify");
-    }}
+  setCategory(v);
+
+  // reset verification only for categories that require verification
+  if (v === "CRYPTO" || v === "SPORTS") {
+    setVerified(null);
+    setButtonStage("verify");
+  } else {
+    // POLITICS / SOCIAL → skip verify step
+    setVerified(true);
+    setButtonStage("approve");
+  }
+}}
     options={["CRYPTO", "SPORTS", "POLITICS", "SOCIAL"]}
   />
 </div>

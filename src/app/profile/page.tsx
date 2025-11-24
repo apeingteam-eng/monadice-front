@@ -339,7 +339,7 @@ setCash(summaryData.total_claimed);
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       <h3 className="text-base font-semibold mb-2">Notes</h3>
       <p className="text-sm text-neutral-400">
-        Manage your on-chain activity and track your performance over time.
+        Manage your prediction activity and track your performance over time.
       </p>
     </div>
 
