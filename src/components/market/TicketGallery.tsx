@@ -49,7 +49,7 @@ export default function TicketGallery({
   const isRunning = marketState === 0 && endTime > now;
   const isPending = marketState === 0 && endTime <= now;
   const isResolved = marketState === 1;
-if (!address) return null;
+
 
   /* ---------------------- LOAD FUNCTION (fix React warning) ---------------------- */
   const load = useCallback(async () => {
@@ -170,10 +170,16 @@ setTickets(merged);
     }
   }, [address, campaignAddress, isResolved]);
 
-  useEffect(() => {
-  if (!address) return;   // ⛔ skip fetch
+useEffect(() => {
+  if (!address) {
+    setTickets([]);
+    setLoading(false);
+    return;
+  }
   load();
 }, [load, address]);
+
+if (!address) return null;
   /* ------------------------------- CLAIM FUNC ------------------------------- */
  async function claimTicket(ticketId: number) {
   try {
