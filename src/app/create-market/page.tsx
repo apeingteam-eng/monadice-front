@@ -270,37 +270,59 @@ for (const log of receipt.logs) {
 
     toast.success(`Market deployed: ${campaignAddress}`);
 
-    // --- Poll backend for event ---
-    toast.info("Waiting for backend sync…");
+   // --- Register market in backend (NEW FLOW) ---
+toast.info("Saving market to backend…");
 
-    let synced = false;
-    for (let i = 0; i < 8; i++) {
-      const syncRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/sync`);
-      if (syncRes.ok) {
-        synced = true;
-        break;
-      }
-      await new Promise(res => setTimeout(res, 1200));
+const backendRes = await fetch(
+  `${process.env.NEXT_PUBLIC_API_URL}/factory/create-market`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      campaign_address: campaignAddress,
+      name: title,            // TITLE → name
+      symbol: category,       // CATEGORY → symbol
+      end_time: endUnix       // unix timestamp
+    }),
+  }
+);
+
+if (!backendRes.ok) {
+  toast.error("Backend market creation failed.");
+} else {
+  toast.success("Market saved to backend!");
+}
+  // --- Award points to market creator ---
+try {
+  const token = localStorage.getItem("access_token");
+
+  const pointsRes = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/points/createUserPoints`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,   // 🔥 REQUIRE AUTH
+      },
+      body: JSON.stringify({
+        user_wallet: address,                // connected wallet
+        campaign_address: campaignAddress,
+      }),
     }
+  );
 
-    synced ? toast.success("Backend synced!") : toast.error("Backend sync failed.");
-
-    // --- Award points ---
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/points/createUserPoints`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_wallet: address,
-          campaign_address: campaignAddress,
-        }),
-      });
-
-      toast.success("Points granted!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Points failed.");
-    }
+  if (!pointsRes.ok) {
+    toast.error("Points could not be awarded.");
+  } else {
+    toast.success("Points granted!");
+  }
+} catch (err) {
+  console.error(err);
+  toast.error("Points failed.");
+}
 
 // --- Attach Draft to Campaign (CRYPTO ONLY) ---
 if (category === "CRYPTO" && draftNonce !== null) {
