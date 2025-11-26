@@ -123,22 +123,36 @@ useEffect(() => {
   }, [walletClient, address]);
 
   /* ------------------------------ CHECK ALLOWANCE -------------------------- */
-  useEffect(() => {
-    async function checkAllowance() {
-      if (!signer || !address) return;
+ useEffect(() => {
+  async function checkAllowanceAndBalance() {
+    if (!signer || !address) return;
 
-      const usdc = new Contract(
-        USDC_ADDRESS,
-        ["function allowance(address owner, address spender) view returns (uint256)"],
-        signer
-      );
+    const usdc = new Contract(
+      USDC_ADDRESS,
+      [
+        "function allowance(address owner, address spender) view returns (uint256)",
+        "function balanceOf(address owner) view returns (uint256)"
+      ],
+      signer
+    );
 
-      const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
-      setAllowanceEnough(allowance >= REQUIRED_USDC);
-    }
-    checkAllowance();
-  }, [signer, address]);
+    const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
+    const balance: bigint = await usdc.balanceOf(address);
 
+    const hasAllowance = allowance >= REQUIRED_USDC;
+    const hasBalance = balance >= REQUIRED_USDC;
+
+  
+      setButtonStage("create");
+
+      if (!hasBalance) {
+        toast.error("You need at least 1 USDC to create a market.");
+      }
+   
+  }
+
+  checkAllowanceAndBalance();
+}, [signer, address]);
   /* ----------------------------- VERIFY CAMPAIGN --------------------------- */
 const handleVerify = async () => {
   if (!accessToken) return toast.error("Please log in to create a market.");
@@ -148,7 +162,7 @@ const handleVerify = async () => {
   // 🚫 Skip verification for ALL non-crypto categories
   if (category !== "CRYPTO") {
     setVerified(true);
-    setButtonStage("approve");
+    setButtonStage("create");
     toast.success("No verification required for this category ✔");
     return;
   }
@@ -193,7 +207,7 @@ const handleVerify = async () => {
     }
 
     setVerified(true);
-    setButtonStage("approve");
+    setButtonStage("create");
   } catch {
     toast.error("Verification failed.");
   } finally {
@@ -202,47 +216,124 @@ const handleVerify = async () => {
 };
   /* --------------------------------- APPROVE -------------------------------- */
   const handleApprove = async () => {
-    if (!signer) return toast.error("Wallet not ready.");
+  if (!signer) return toast.error("Wallet not ready.");
 
-    try {
-      setLoading(true);
-      toast.info("Approving 1 USDC…");
+  try {
+    setLoading(true);
+    toast.info("Checking your current approval…");
 
-      const usdc = new Contract(
-        USDC_ADDRESS,
-        ["function approve(address spender, uint256 amount) returns (bool)"],
-        signer
-      );
+    const usdc = new Contract(
+      USDC_ADDRESS,
+      [
+        "function allowance(address owner, address spender) view returns (uint256)",
+        "function approve(address spender, uint256 amount) returns (bool)",
+        "function balanceOf(address owner) view returns (uint256)"
+      ],
+      signer
+    );
 
-      const tx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
-      await tx.wait();
+    const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
 
-      toast.success("USDC approved!");
-      setAllowanceEnough(true);
+    if (allowance >= REQUIRED_USDC) {
+      toast.success("Already approved!");
       setButtonStage("create");
-    } catch {
-      toast.error("Approval failed.");
-    } finally {
       setLoading(false);
+      return;
     }
-  };
 
+    const balance: bigint = await usdc.balanceOf(address);
+    if (balance < REQUIRED_USDC) {
+      toast.error("You need at least 1 USDC to create a market.");
+      setLoading(false);
+      return;
+    }
+
+    toast.info("Approving 1 USDC…");
+
+    const tx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
+    await tx.wait();
+
+    toast.success("USDC approved!");
+    setButtonStage("create");
+  } catch (err) {
+    toast.error("Approval failed.");
+  } finally {
+    setLoading(false);
+  }
+};
+function buildSportsTitle() {
+  if (!participantA || !participantB) return "";
+
+  if (sportOutcome === "beat") {
+    return `${participantA} beats ${participantB}?`;
+  }
+
+  if (sportOutcome === "draw") {
+    return `${participantA} and ${participantB} draw?`;
+  }
+
+  if (sportOutcome === "score") {
+    if (!scoreA || !scoreB) return "";
+    return `${participantA} vs ${participantB} ends ${scoreA}–${scoreB}?`;
+  }
+
+  return "";
+}
   /* ------------------------------ CREATE MARKET ---------------------------- */
  const handleCreateMarket = async () => {
   if (!verified) return toast.error("Verify your market first.");
   if (!signer) return toast.error("Wallet not ready.");
   if (chainId !== TARGET_CHAIN_ID) return toast.error(`Switch to ${CHAIN.name}.`);
   if (!selectedDate) return toast.error("Date missing.");
+if (category === "SPORTS") {
+    if (!participantA || !participantB) {
+      toast.error("Please enter both participants.");
+      return;
+    }
 
+    if (sportOutcome === "score" && (!scoreA || !scoreB)) {
+      toast.error("Please enter final score.");
+      return;
+    }
+  }
   try {
     setLoading(true);
     toast.info("Creating market…");
 
     const endUnix = Math.floor(selectedDate.getTime() / 1000);
     const factory = new Contract(FACTORY_ADDRESS, BetMarketFactoryABI, signer);
+    const finalTitle = category === "SPORTS" ? buildSportsTitle() : title;
+   
+// --- Auto-approve if allowance < 1 USDC ---
+const usdc = new Contract(
+  USDC_ADDRESS,
+  [
+    "function allowance(address owner, address spender) view returns (uint256)",
+    "function approve(address spender, uint256 amount) returns (bool)",
+    "function balanceOf(address owner) view returns (uint256)"
+  ],
+  signer
+);
 
-    const tx = await factory.createCampaign(title, category, endUnix, 200);
-    toast.info("Waiting for confirmations…");
+// CHECK ALLOWANCE
+const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
+
+if (allowance < REQUIRED_USDC) {
+  toast.info("Approving 1 USDC…");
+  const approveTx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
+  await approveTx.wait();
+  toast.success("Approved ✔");
+}
+
+// CHECK BALANCE
+const balance: bigint = await usdc.balanceOf(address);
+
+if (balance < REQUIRED_USDC) {
+  toast.error("You need at least 1 USDC to create a market.");
+  setLoading(false);
+  return;
+}
+const tx = await factory.createCampaign(finalTitle, category, endUnix, 200);    toast.info("Waiting for confirmations…");
 
     const receipt = await tx.wait(2);
 
@@ -281,12 +372,13 @@ const backendRes = await fetch(
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      campaign_address: campaignAddress,
-      name: title,            // TITLE → name
-      symbol: category,       // CATEGORY → symbol
-      end_time: endUnix       // unix timestamp
-    }),
+    
+body: JSON.stringify({
+  campaign_address: campaignAddress,
+  name: finalTitle,       // 🟣 CORRECTED
+  symbol: category,
+  end_time: endUnix
+}),
   }
 );
 
@@ -546,7 +638,7 @@ return (
 } else {
   // SPORTS, POLITICS, SOCIAL skip verification
   setVerified(true);
-  setButtonStage("approve");
+  setButtonStage("create");
 }
 }}
     options={["CRYPTO", "SPORTS", "POLITICS", "SOCIAL"]}
@@ -592,35 +684,29 @@ return (
 </div>
 
           <button
-            onClick={() => {
-              if (buttonStage === "verify") return handleVerify();
-              if (buttonStage === "approve") return handleApprove();
-              if (buttonStage === "create") return handleCreateMarket();
-            }}
-            disabled={loading}
-            className="
-              relative w-full py-3 mt-4 rounded-xl font-semibold
-              bg-gradient-to-r from-[#A46CFF] via-accentPurple to-[#8A5DFF]
-              text-white overflow-hidden transition-all
-              shadow-[0_0_25px_rgba(155,93,229,0.45)]
-              hover:shadow-[0_0_40px_rgba(155,93,229,0.8)]
-              hover:scale-[1.01] active:scale-[0.98]
-              disabled:opacity-40 disabled:cursor-not-allowed
-            "
-          >
-            {loading
-              ? buttonStage === "verify"
-                ? "Verifying…"
-                : buttonStage === "approve"
-                ? "Approving…"
-                : "Creating…"
-              : buttonStage === "verify"
-              ? "Verify Market"
-              : buttonStage === "approve"
-              ? "Approve 1 USDC"
-              : "Create Market"}
-          </button>
-
+  onClick={() => {
+    if (buttonStage === "verify") return handleVerify();
+    return handleCreateMarket(); // always create, approval is automatic inside
+  }}
+  disabled={loading}
+  className="
+    relative w-full py-3 mt-4 rounded-xl font-semibold
+    bg-gradient-to-r from-[#A46CFF] via-accentPurple to-[#8A5DFF]
+    text-white overflow-hidden transition-all
+    shadow-[0_0_25px_rgba(155,93,229,0.45)]
+    hover:shadow-[0_0_40px_rgba(155,93,229,0.8)]
+    hover:scale-[1.01] active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-not-allowed
+  "
+>
+  {loading
+    ? buttonStage === "verify"
+      ? "Verifying…"
+      : "Creating…"
+    : buttonStage === "verify"
+    ? "Verify Market"
+    : "Create Market"}
+</button>
         </div>
       </div>
     </div>
