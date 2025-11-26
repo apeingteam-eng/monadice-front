@@ -139,16 +139,12 @@ useEffect(() => {
     const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
     const balance: bigint = await usdc.balanceOf(address);
 
-    const hasAllowance = allowance >= REQUIRED_USDC;
-    const hasBalance = balance >= REQUIRED_USDC;
-
-  
-      setButtonStage("create");
-
-      if (!hasBalance) {
-        toast.error("You need at least 1 USDC to create a market.");
-      }
-   
+    console.log("USDC check:", {
+      allowance: Number(allowance),
+      balance: Number(balance),
+      hasAllowance: allowance >= REQUIRED_USDC,
+      hasBalance: balance >= REQUIRED_USDC,
+    });
   }
 
   checkAllowanceAndBalance();
@@ -285,6 +281,10 @@ function buildSportsTitle() {
   if (!signer) return toast.error("Wallet not ready.");
   if (chainId !== TARGET_CHAIN_ID) return toast.error(`Switch to ${CHAIN.name}.`);
   if (!selectedDate) return toast.error("Date missing.");
+  // 🟣 Require a title for all non-sports categories
+if (category !== "SPORTS" && !title.trim()) {
+  return toast.error("Please enter a market title.");
+}
 if (category === "SPORTS") {
     if (!participantA || !participantB) {
       toast.error("Please enter both participants.");
@@ -316,6 +316,16 @@ const usdc = new Contract(
 );
 
 // CHECK ALLOWANCE
+// 1️⃣ CHECK BALANCE FIRST
+const balance: bigint = await usdc.balanceOf(address);
+
+if (balance < REQUIRED_USDC) {
+  toast.error("You need at least 1 USDC to create a market.");
+  setLoading(false);
+  return;
+}
+
+// 2️⃣ CHECK ALLOWANCE SECOND
 const allowance: bigint = await usdc.allowance(address, FACTORY_ADDRESS);
 
 if (allowance < REQUIRED_USDC) {
@@ -323,15 +333,6 @@ if (allowance < REQUIRED_USDC) {
   const approveTx = await usdc.approve(FACTORY_ADDRESS, REQUIRED_USDC);
   await approveTx.wait();
   toast.success("Approved ✔");
-}
-
-// CHECK BALANCE
-const balance: bigint = await usdc.balanceOf(address);
-
-if (balance < REQUIRED_USDC) {
-  toast.error("You need at least 1 USDC to create a market.");
-  setLoading(false);
-  return;
 }
 const tx = await factory.createCampaign(finalTitle, category, endUnix, 200);    toast.info("Waiting for confirmations…");
 
