@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import MarketCard, { MarketSummary } from "@/components/MarketCard";
 import Hero from "@/components/Hero";
+import TopMarketsByCategory from "@/components/TopMarketsByCategory"; // <--- IMPORT THIS
 import { useSelector } from "react-redux";
 import type { RootState } from "@/state/store";
 
@@ -23,32 +24,32 @@ export default function Home() {
 
 
   // Capture referral code from URL
-useEffect(() => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get("ref");
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
 
-  if (ref) {
-    localStorage.setItem("referral_code", ref);
-  }
-}, []);
-
-useEffect(() => {
-  async function loadMarkets() {
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/campaigns`);
-      const data = await res.json();
-
-      setMarkets(data); // ← direct use
-    } catch (err) {
-      console.error("Failed to load campaigns:", err);
-    } finally {
-      setLoading(false);
+    if (ref) {
+      localStorage.setItem("referral_code", ref);
     }
-  }
-  loadMarkets();
-}, []);
+  }, []);
+
+  useEffect(() => {
+    async function loadMarkets() {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/factory/campaigns`);
+        const data = await res.json();
+
+        setMarkets(data); 
+      } catch (err) {
+        console.error("Failed to load campaigns:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadMarkets();
+  }, []);
 
   const filtered = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -83,17 +84,29 @@ useEffect(() => {
       <div className="relative z-0 overflow-hidden">
         <Hero markets={markets} />
       </div>
-      <div className="container mx-auto p-6">
+
+      {/* --- NEW SECTION: Top Markets By Category --- */}
+      {/* Only show if not loading and we have markets */}
+      {!loading && markets.length > 0 && (
+         // CHANGED: Removed 'bg-black/20' so it isn't "deep dark"
+         // It will now just use the page's natural background color
+         <div>
+            <TopMarketsByCategory markets={markets} />
+         </div>
+      )}
+
+      {/* --- EXISTING SECTION: Main Grid --- */}
+      <div className="container mx-auto p-6 mt-8">
         <div className="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Markets</h1>
+            <h1 className="text-2xl font-semibold">All Markets</h1>
             <p className="text-xs text-neutral-400">
               Filter markets by status, or category
             </p>
           </div>
 
           {/* FILTERS */}
-<div className="flex flex-col lg:flex-row gap-3 w-full">
+          <div className="flex flex-col lg:flex-row gap-3 w-full lg:w-auto">
             {/* STATUS FILTER */}
             <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 -mx-1 px-1 flex-nowrap">
               {["All", "Running", "Pending", "Ended"].map((f) => (
@@ -101,7 +114,7 @@ useEffect(() => {
                   key={f}
                   onClick={() => setActiveFilter(f as "All" | "Running" | "Pending" | "Ended")}
                   className={`
-                    px-3 py-1 text-xs rounded-full border transition
+                    px-3 py-1 text-xs rounded-full border transition whitespace-nowrap
                     ${
                       activeFilter === f
                         ? "border-accentPurple text-accentPurple bg-accentPurple/10"
@@ -124,7 +137,7 @@ useEffect(() => {
                   key={cat}
                   onClick={() => setCategoryFilter(cat as "All" | "SPORTS" | "CRYPTO" | "POLITICS" | "SOCIAL")}
                   className={`
-                    px-3 py-1 text-xs rounded-full border transition
+                    px-3 py-1 text-xs rounded-full border transition whitespace-nowrap
                     ${
                       categoryFilter === cat
                         ? "border-accentPurple text-accentPurple bg-accentPurple/10"
@@ -139,7 +152,7 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Markets */}
+        {/* Markets Grid */}
         {loading ? (
           <p className="text-sm text-neutral-400">Loading campaigns…</p>
         ) : filtered.length === 0 ? (

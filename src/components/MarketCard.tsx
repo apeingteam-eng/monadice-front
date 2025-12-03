@@ -34,11 +34,16 @@ function formatUsdShort(n: number) {
 function formatCountdown(endUnix: number): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = Math.max(endUnix - now, 0);
-  const hours = Math.floor(diff / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
+
   if (diff <= 0) return "Ended";
-  if (hours === 0) return `Ends in ${minutes}m`;
-  return `Ends in ${hours}h ${minutes}m`;
+
+  const days = Math.floor(diff / 86400);
+  const hours = Math.floor((diff % 86400) / 3600);
+  const minutes = Math.floor((diff % 3600) / 60);
+
+  if (days > 0) return `Ends in ${days}d ${hours}h`;
+  if (hours > 0) return `Ends in ${hours}h ${minutes}m`;
+  return `Ends in ${minutes}m`;
 }
 
 export default function MarketCard({ market }: { market: MarketSummary }) {
