@@ -88,9 +88,8 @@ export default function Home() {
       {/* --- NEW SECTION: Top Markets By Category --- */}
       {/* Only show if not loading and we have markets */}
       {!loading && markets.length > 0 && (
-         // CHANGED: Removed 'bg-black/20' so it isn't "deep dark"
-         // It will now just use the page's natural background color
-         <div>
+         // CHANGED: Added 'hidden lg:block' to hide this section on mobile
+         <div className="hidden lg:block border-b border-neutral-800">
             <TopMarketsByCategory markets={markets} />
          </div>
       )}
