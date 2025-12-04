@@ -21,7 +21,7 @@ type Props = {
 
 type PayoutResponse = {
   potential_payout: number;
-  potential_profit: number; // <--- FIXED: Match backend response
+  potential_profit: number; // Matches backend response
 };
 
 // Simple Loading Spinner
@@ -59,10 +59,9 @@ export default function PlaceBetForm({ campaignId, campaignAddress, bettingClose
       try {
         setFetchingPayout(true);
 
-        // API expects side as boolean/1/0? Logic below uses boolean string "true"/"false" by default in template literals
         const side = outcome === "Yes"; 
         
-        // FIXED: param 'amount' -> 'stake'
+        // Use campaign_id parameter instead of campaign_address
         const url = `${process.env.NEXT_PUBLIC_API_URL}/bet/calculate-payout?campaign_id=${campaignId}&side=${side}&stake=${amount}`;
 
         const res = await fetch(url, { signal: controller.signal });
@@ -70,7 +69,6 @@ export default function PlaceBetForm({ campaignId, campaignAddress, bettingClose
 
         const json = (await res.json()) as PayoutResponse;
 
-        // FIXED: Check for potential_profit
         if (
           typeof json.potential_payout === "number" &&
           typeof json.potential_profit === "number"
@@ -196,9 +194,16 @@ export default function PlaceBetForm({ campaignId, campaignAddress, bettingClose
       setAmount(""); // Reset form
       setPayoutData(null);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Bet error:", err);
-      const msg = err.message || "Transaction failed";
+      
+      // Fix: Safely extract error message without using 'any'
+      let msg = "Transaction failed";
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === 'string') {
+        msg = err;
+      }
       
       if (msg.includes("transfer amount exceeds balance")) {
         toast.error("Insufficient USDC balance.");
@@ -303,7 +308,6 @@ export default function PlaceBetForm({ campaignId, campaignAddress, bettingClose
            {fetchingPayout ? (
             <div className="h-4 w-12 bg-neutral-800 animate-pulse rounded" />
           ) : (
-            // FIXED: Use potential_profit
             <span className={`${(payoutData?.potential_profit || 0) > 0 ? "text-green-400" : "text-neutral-500"} font-mono font-medium`}>
               +{(payoutData?.potential_profit || 0).toFixed(2)} USDC
             </span>

@@ -316,10 +316,10 @@ export default function MarketPage() {
                     
                     {isRunning ? (
                       <PlaceBetForm
-  campaignId={campaign.id} // <--- ADD THIS PROP
-  campaignAddress={campaign.campaign_address}
-  bettingClosed={false}
-/>
+                        campaignId={campaign.id}
+                        campaignAddress={campaign.campaign_address}
+                        bettingClosed={false}
+                      />
                     ) : (
                       <ClaimView
                         campaignAddress={campaign.campaign_address as `0x${string}`}
@@ -332,7 +332,7 @@ export default function MarketPage() {
                 {/* Disclaimer / Info */}
                 <div className="p-4 rounded-xl bg-accentPurple/5 border border-accentPurple/10 text-xs text-neutral-400 leading-relaxed">
                   <strong className="text-accentPurple block mb-1">How it works</strong>
-                  Buy "Yes" or "No" tickets. If the outcome matches your ticket, you win a share of the opposing pool + your initial stake back.
+                  Buy &quot;Yes&quot; or &quot;No&quot; tickets. If the outcome matches your ticket, you win a share of the opposing pool + your initial stake back.
                 </div>
              </div>
           </div>

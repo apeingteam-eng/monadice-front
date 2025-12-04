@@ -47,9 +47,7 @@ export default function TicketGallery({
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<number | null>(null);
 
-  const now = Math.floor(Date.now() / 1000);
-  const isRunning = marketState === 0 && endTime > now;
-  const isPending = marketState === 0 && endTime <= now;
+  // Removed unused 'now', 'isRunning', 'isPending' variables
   const isResolved = marketState === 1;
 
   /* ---------------------- LOAD FUNCTION ---------------------- */
@@ -139,9 +137,9 @@ export default function TicketGallery({
                     imageUrl: t.claimed ? "/monadice_burned.png" : `/monadice${Math.min(bTicket.ticket_id, 6)}.png`,
                     burned: t.claimed,
                 });
-            } catch (err) {
-                // Fallback to backend data if on-chain read fails (e.g. pruned or burned?)
-                // Usually this happens if the ticket logic is different, but safe fallback:
+            } catch {
+                // REMOVED UNUSED 'err' variable here
+                // Fallback to backend data if on-chain read fails
                 result.push({
                     id: bTicket.ticket_id,
                     side: bTicket.side ? 0 : 1,
@@ -242,8 +240,14 @@ export default function TicketGallery({
       } catch (err) { console.error(err); }
 
       await load();
-    } catch (err: any) {
-        const msg = err.message || "";
+    } catch (err: unknown) { // Changed 'any' to 'unknown'
+        let msg = "Transaction failed.";
+        if (err instanceof Error) {
+            msg = err.message;
+        } else if (typeof err === "string") {
+            msg = err;
+        }
+
         if (msg.includes("User rejected") || msg.includes("User denied")) {
             toast.error("Transaction cancelled.");
         } else {

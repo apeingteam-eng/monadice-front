@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Contract, JsonRpcProvider } from "ethers";
 import BetCampaignABI from "@/lib/ethers/abi/BetCampaign.json";
 import { CHAIN } from "@/config/network";
@@ -49,21 +49,13 @@ export default function ClaimView({
   const [state, setState] = useState<number | null>(null);
   const [outcomeTrue, setOutcomeTrue] = useState<boolean | null>(null);
 
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  // Removed unused 'tickets' state
   const [winningTickets, setWinningTickets] = useState<Ticket[]>([]);
   const [totalPayout, setTotalPayout] = useState<number>(0);
   const [claiming, setClaiming] = useState(false);
 
-  /* --------------------------- Load All Data --------------------------- */
-  useEffect(() => {
-    if (!address) {
-      setLoading(false);
-      return;
-    }
-    loadAll();
-  }, [campaignAddress, address]);
-
-  async function loadAll() {
+  /* --------------------------- Load Function --------------------------- */
+  const loadAll = useCallback(async () => {
     if (!address) return;
 
     try {
@@ -123,25 +115,23 @@ export default function ClaimView({
       setOutcomeTrue(outcome);
 
       // 4. Fetch User Tickets Optimized
-      // Instead of looping 1..nextId, we iterate ONLY the user's backend ticket IDs.
       const owned: Ticket[] = [];
       
-      // OPTIMIZATION: Process in chunks to avoid rate limits if user has many bets
       for (let i = 0; i < backend.length; i++) {
         const bet = backend[i];
         
-        // Rate limit protection: wait 50ms every 5 requests
+        // Rate limit protection
         if (i > 0 && i % 5 === 0) await delay(50);
 
         try {
-          // Verify ownership on-chain (optional but safe)
+          // Verify ownership on-chain
           const owner = await contract.ownerOf(bet.ticket_id);
           if (owner.toLowerCase() !== address.toLowerCase()) continue;
 
-          // Fetch latest ticket state (to see if claimed on-chain)
+          // Fetch latest ticket state
           const t = await contract.tickets(bet.ticket_id);
           const rawSide = t.side;
-          const side = rawSide ? 0 : 1; // true -> YES(0), false -> NO(1)
+          const side = rawSide ? 0 : 1; 
 
           owned.push({
             id: Number(t.id),
@@ -154,13 +144,12 @@ export default function ClaimView({
         }
       }
 
-      setTickets(owned);
+      // Removed unnecessary setTickets(owned);
 
       // 5. Calculate Winnings (Only if Resolved)
       if (Number(s) === 1) {
         const winners = owned.filter((t) => {
           const didWin = outcome ? t.side === 0 : t.side === 1;
-          // We rely on contract 'claimed' status here, not backend, for enabling the button
           return !t.claimed && didWin;
         });
 
@@ -187,7 +176,16 @@ export default function ClaimView({
     } finally {
       setLoading(false);
     }
-  }
+  }, [address, campaignAddress, toast]); // endTime is strictly for render logic, mostly
+
+  /* --------------------------- Effect --------------------------- */
+  useEffect(() => {
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+    loadAll();
+  }, [address, loadAll]);
 
   /* ------------------------------ Claim All ------------------------------ */
   async function claimAll() {
@@ -198,7 +196,7 @@ export default function ClaimView({
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
       const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-      // Fetch fresh totals for payout calc
+      // Fetch fresh totals
       const [totalTrue, totalFalse, totalInitialPot, feeBps, outcome] = await Promise.all([
         contract.totalTrue().then((n: bigint) => Number(n) / 1e6),
         contract.totalFalse().then((n: bigint) => Number(n) / 1e6),
@@ -223,8 +221,14 @@ export default function ClaimView({
             functionName: "claim",
             args: [t.id],
           });
-        } catch (err: any) {
-            const msg = err.message || String(err);
+        } catch (err: unknown) {
+            let msg = "Transaction failed.";
+            if (err instanceof Error) {
+                msg = err.message;
+            } else if (typeof err === "string") {
+                msg = err;
+            }
+
             if (msg.includes("User rejected") || msg.includes("User denied")) {
                 toast.error("Transaction cancelled.");
             } else {
