@@ -51,14 +51,13 @@ const { wallets, connectors } = getDefaultWallets({
 });
 
 // Wagmi Config (v2)
-const config = createConfig({
+export const config = createConfig({
   chains: [monadMainnet],
   connectors,
   transports: {
     [monadMainnet.id]: http("https://rpc.monad.xyz"),
   },
 });
-
 // Queries
 const queryClient = new QueryClient();
 

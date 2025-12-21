@@ -32,6 +32,7 @@ export const NETWORKS = {
     addresses: {
       FACTORY: "0xeBfbE5f4EDB6378ade8A815Fc2DAf147C5b8Cb86",
       USDC: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+      MARKETPLACE: "0x55C064b10519059bc3234aCb14157bf750116541",
     },
   },
 } as const;
