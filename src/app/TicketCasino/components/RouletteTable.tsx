@@ -13,7 +13,7 @@ import Image from "next/image";
 
 interface WagmiError extends Error {
   shortMessage?: string;
-  walk?: (fn: (e: any) => string | undefined) => string | undefined;
+  walk?: (fn: (e: { data?: { message?: string }; message: string }) => string | undefined) => string | undefined;
 }
 // --- CONTRACT CONSTANTS ---
 const ROULETTE_CONTRACT_ADDRESS = "0xC44EE941AADB30A287e1F7C06026f9a8cBc435B7";
@@ -222,7 +222,7 @@ export default function RouletteTable({
   console.error("Betting Flow Error:", error);
   
   // 2. Use 'error' instead of 'err' for all properties
-  const revertReason = error.walk?.((e: any) => e.data?.message || e.message);
+  const revertReason = error.walk?.((e) => e.data?.message || e.message);
   
   if (revertReason?.includes("campaign not allowed")) {
     alert("Error: This market collection is not whitelisted for the Roulette.");
@@ -290,7 +290,6 @@ export default function RouletteTable({
       </div>
     </div>
 
-    {/* --- FIXED BET SLIP SUMMARY --- */}
     {/* --- FIXED BET SLIP SUMMARY --- */}
     {placed.length > 0 && (
       <div className="mt-4 rounded-xl bg-[#0A0A0A]/80 border border-white/10 overflow-hidden shadow-lg backdrop-blur-md">
