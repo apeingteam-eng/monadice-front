@@ -1,17 +1,20 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo} from "react";
 import { useWriteContract, usePublicClient, useAccount } from "wagmi";
-import { ExternalLink } from "lucide-react";
 import ERC721_ABI from "@/lib/ethers/abi/erc721.json";
 import { readContract } from "@wagmi/core";
 import { 
-  BetType,
   BetTypeKey,
   PlacedBet, 
 } from "../types";
 import { config } from "@/app/providers";
+import Image from "next/image";
 
+interface WagmiError extends Error {
+  shortMessage?: string;
+  walk?: (fn: (e: any) => string | undefined) => string | undefined;
+}
 // --- CONTRACT CONSTANTS ---
 const ROULETTE_CONTRACT_ADDRESS = "0xC44EE941AADB30A287e1F7C06026f9a8cBc435B7";
 
@@ -213,17 +216,22 @@ export default function RouletteTable({
 
       alert("Success! All bets have been placed on the blockchain.");
       setPlaced([]);
-   } catch (err: any) {
-  console.error("Betting Flow Error:", err);
+   } catch (err: unknown) { 
+  // 1. Cast the unknown error to our custom interface
+  const error = err as WagmiError;
+  console.error("Betting Flow Error:", error);
   
-  const revertReason = err.walk?.((e: any) => e.data?.message || e.message);
+  // 2. Use 'error' instead of 'err' for all properties
+  const revertReason = error.walk?.((e: any) => e.data?.message || e.message);
   
-  // Specific check for the whitelist revert string in your contract
   if (revertReason?.includes("campaign not allowed")) {
     alert("Error: This market collection is not whitelisted for the Roulette.");
-  } else if (err.name === 'UserRejectedRequestError' || err.message.includes("rejected")) {
+  } 
+  // Fixed: Changed 'err' to 'error' here
+  else if (error.name === 'UserRejectedRequestError' || error.message.includes("rejected")) {
     alert("Transaction cancelled by user.");
-  } else {
+  } 
+  else {
     alert(`Error: ${revertReason || "The transaction reverted. Check your balance or if the round is closed."}`);
   }
 
@@ -236,12 +244,14 @@ export default function RouletteTable({
     <div className="relative w-full border border-white/10 bg-black/40 rounded-none md:rounded-2xl shadow-2xl">
       <div className="absolute inset-0 rounded-none md:rounded-2xl ring-1 ring-white/10 pointer-events-none" />
       <div className="relative w-full aspect-[2912/1472]">
-        <img
-          src="/MonadiceTable.png"
-          alt="Roulette Table"
-          className="absolute inset-0 h-full w-full object-cover select-none"
-          draggable={false}
-        />
+        <Image
+  src="/MonadiceTable.png"
+  alt="Roulette Table"
+  fill
+  priority
+  className="object-cover select-none"
+  draggable={false}
+/>
 
         <div className="absolute inset-0">
           <div

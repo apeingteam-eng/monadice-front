@@ -17,7 +17,32 @@ import {
   CampaignGroup,
 } from "./types";
 
+// ADD THESE INTERFACES HERE
+interface RouletteStatusResponse {
+  stage_id: number;
+  round_id: number;
+  seconds_remaining: number;
+}
 
+interface RouletteDetailedInfo {
+  round?: {
+    resultNumber?: number;
+  };
+  tx?: string;
+  [key: string]: unknown; // For the raw JSON output
+}
+
+interface CasinoBetResponse {
+  bets: {
+    campaign_id: number;
+    campaign_address: string;
+    campaign_name: string;
+    ticket_id: number;
+    stake: number;
+    side: boolean | number;
+    payout: number | null;
+  }[];
+}
 
 /* ==============================
    PAGE
@@ -31,7 +56,7 @@ export default function TicketCasinoPage() {
   const [resultNumber, setResultNumber] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [roundId, setRoundId] = useState<number | null>(null);
-  const [stageInfo, setStageInfo] = useState<any>(null);
+  const [stageInfo, setStageInfo] = useState<RouletteDetailedInfo | null>(null);
   const [showInfo, setShowInfo] = useState(false);
 
   // UI States
@@ -59,30 +84,31 @@ export default function TicketCasinoPage() {
   const fetchDetailedInfo = async (stage_id: number) => {
     try {
       const infoRes = await api.get("/roulette/getStageInformation");
-const data = (infoRes.data as any).response; // Cast here to resolve 'unknown'
-setStageInfo(data);
+      // Fixed: Replaced any with RouletteDetailedInfo
+      const data = (infoRes.data as { response: RouletteDetailedInfo }).response; 
+      setStageInfo(data);
 
-      // If we transitioned into Stage 3 (Result), update the winning number
       if (stage_id === 3 && data?.round?.resultNumber !== undefined) {
         setResultNumber(data.round.resultNumber);
       }
-    } catch (err) {
-      console.error("Failed to fetch detailed stage information:", err);
-    }
+    } catch (err: unknown) {
+  const error = err as Error;
+  console.error("Failed to fetch information:", error.message);
+}
   };
 
   /* -----------------------------------------
      API POLLING LOGIC (Every 2 seconds)
   ------------------------------------------ */
-  useEffect(() => {
+ useEffect(() => {
     const fetchStatus = async () => {
       try {
-        // 1. Get Current Stage Summary
-const stageRes = await api.get("/roulette/getStage");
-// Cast to 'any' or a specific interface to access properties
-const { stage_id, round_id, seconds_remaining } = stageRes.data as any;
+        const stageRes = await api.get("/roulette/getStage");
+        // Fixed: Replaced any with RouletteStatusResponse
+        const { stage_id, round_id, seconds_remaining } = stageRes.data as RouletteStatusResponse;
 
-setRoundId(round_id);
+        setRoundId(round_id);
+        // ... rest of logic
         // Update basic stage UI
         if (stage_id === 4) {
           setStage(RouletteStage.PREPARATION);
@@ -133,10 +159,10 @@ setRoundId(round_id);
       setLoadingTickets(true);
       const headers = await getAuthHeader();
       const res = await api.get("/auth/me/getbetsforcasino", { headers });
-// Access data with casting
-const betsData = res.data as any; 
-const bets = Array.isArray(betsData?.bets) ? betsData.bets : [];
-
+      
+      // Fixed: Replaced any with CasinoBetResponse
+      const betsData = res.data as CasinoBetResponse; 
+      const bets = Array.isArray(betsData?.bets) ? betsData.bets : [];
       const grouped = new Map<string, CampaignGroup>();
       for (const b of bets) {
         if (typeof b.ticket_id !== "number") continue;
@@ -164,8 +190,9 @@ const bets = Array.isArray(betsData?.bets) ? betsData.bets : [];
 });
       }
       setCampaignGroups(Array.from(grouped.values()));
-    } catch (err: any) {
-      console.error("Failed to load tickets:", err);
+    } catch (err: unknown) {
+  const error = err as Error;
+  console.error("Failed to load tickets:", error.message);
       setCampaignGroups([]);
     } finally {
       setLoadingTickets(false);
@@ -322,7 +349,8 @@ function handleClearAll(placed: PlacedBet[]) {
                                     <span className="text-[8px] text-white/30 uppercase">Last Transaction</span>
                                     <a 
                                       href={`https://monad-explorer.com/tx/${stageInfo.tx}`} 
-                                      target="_blank" 
+  target="_blank" 
+  rel="noopener noreferrer"
                                       className="text-[10px] text-accentPurple flex items-center gap-1 hover:underline"
                                     >
                                       {stageInfo.tx.substring(0, 12)}...{stageInfo.tx.substring(stageInfo.tx.length - 8)} 
@@ -333,7 +361,7 @@ function handleClearAll(placed: PlacedBet[]) {
                                 <div className="flex flex-col gap-1">
                                   <span className="text-[8px] text-white/30 uppercase">Raw JSON Output</span>
                                   <pre className="text-[9px] font-mono text-white/20 overflow-x-auto custom-scrollbar whitespace-pre-wrap max-h-[120px]">
-                                    {JSON.stringify(stageInfo, null, 2)}
+                                    {stageInfo ? JSON.stringify(stageInfo, null, 2) : ""}
                                   </pre>
                                 </div>
                               </div>
