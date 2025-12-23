@@ -61,6 +61,7 @@ export type PlacedBet = {
   ticketUid: string;
   ticketId: number;
   campaignAddress: string;
+  campaignId: number;
   campaignName: string;
   betType: BetTypeKey; 
   numbers: number[];

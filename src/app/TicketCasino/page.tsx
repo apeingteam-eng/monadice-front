@@ -289,13 +289,14 @@ function handleClearAll(placed: PlacedBet[]) {
                       <div className="animate-spin h-6 w-6 border-2 border-accentPurple border-t-transparent rounded-full" />
                     </div>
                   )}
-                  {campaignGroups.map((campaign) => (
+                 {campaignGroups.map((campaign) => (
   <div key={campaign.campaignAddress} className="flex flex-col gap-3">
     <span className="text-xs font-bold text-white truncate px-1">{campaign.name}</span>
     <div className="bg-black/20 rounded-xl border border-white/5 p-2">
       <TicketTray
         tickets={campaign.tickets}
-        campaignName={campaign.name} // <--- ADD THIS LINE
+        campaignName={campaign.name}
+        campaignId={campaign.campaignId} // <--- ADD THIS LINE TO FIX THE ERROR
         disabled={stage !== RouletteStage.PREPARATION || loadingTickets}
       />
     </div>

@@ -5,17 +5,18 @@ import {
   TrayTicket, 
 } from "../types";
 
-
 type TicketTrayProps = {
   tickets: TrayTicket[];
   disabled?: boolean;
-  campaignName: string; // <--- ADD THIS PROP
+  campaignName: string;
+  campaignId: number; // The numeric ID required by your POST /roulette/bets API
 };
 
 export default function TicketTray({
   tickets,
   disabled = false,
-  campaignName, // <--- DESTRUCTURE THIS
+  campaignName,
+  campaignId, // Fix: Destructure this so it's available in the function scope
 }: TicketTrayProps) {
   if (tickets.length === 0) return null;
 
@@ -25,7 +26,6 @@ export default function TicketTray({
         {tickets.map((t) => {
           const side = Boolean(t.side);
           const stake = Number.isFinite(t.stake) ? t.stake : 0;
-          const payout = typeof t.payout === "number" ? t.payout : null;
           const isYes = side;
 
           return (
@@ -34,11 +34,20 @@ export default function TicketTray({
               draggable={!disabled}
               onDragStart={(e) => {
                 if (disabled) return;
-                // Use campaignName from PROPS, not from t.campaignName (which might be empty)
-                e.dataTransfer.setData(
-                  "text/ticketUid",
-                  `${t.uid}|${t.ticketId}|${t.campaignAddress}|${t.side ? '1' : '0'}|${t.stake}|${campaignName}`
-                );
+                
+                // DATA STRING: We add campaignId as the 7th piece of information (index 6)
+                // Format: uid | ticketId | campaignAddress | side | stake | campaignName | campaignId
+                const dataString = [
+                  t.uid,
+                  t.ticketId,
+                  t.campaignAddress,
+                  t.side ? '1' : '0',
+                  t.stake,
+                  campaignName,
+                  campaignId // <--- This fixes the "No value exists in scope" error in RouletteTable
+                ].join("|");
+
+                e.dataTransfer.setData("text/ticketUid", dataString);
                 e.dataTransfer.effectAllowed = "copy";
               }}
               className={`

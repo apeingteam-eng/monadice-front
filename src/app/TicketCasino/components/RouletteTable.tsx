@@ -10,13 +10,13 @@ import {
 } from "../types";
 import { config } from "@/app/providers";
 import Image from "next/image";
-
+import api from "@/config/api";
 interface WagmiError extends Error {
   shortMessage?: string;
   walk?: (fn: (e: { data?: { message?: string }; message: string }) => string | undefined) => string | undefined;
 }
 // --- CONTRACT CONSTANTS ---
-const ROULETTE_CONTRACT_ADDRESS = "0xC44EE941AADB30A287e1F7C06026f9a8cBc435B7";
+const ROULETTE_CONTRACT_ADDRESS = "0xdbb5075bc89d97C548048BaA6Fb59aFd6508cA59";
 
 // --- CONTRACT ENUM MAPPING ---
 const BET_TYPE_MAP: Record<string, number> = {
@@ -111,44 +111,46 @@ export default function RouletteTable({
   }, [placed]);
 
   function onDropZone(e: React.DragEvent, zone: Zone) {
-    if (disabled) return;
-    e.preventDefault();
+  if (disabled) return;
+  e.preventDefault();
 
-    const raw = e.dataTransfer.getData("text/ticketUid");
-    if (!raw) return;
+  const raw = e.dataTransfer.getData("text/ticketUid");
+  if (!raw) return;
 
-    const parts = raw.split("|");
-    // Parts: [0:uid, 1:ticketId, 2:campaignAddress, 3:side, 4:stake, 5:campaignName]
-    if (parts.length < 6) return; // Change to 6 to be safe
+  const parts = raw.split("|");
+  
+  // Parts: [0:uid, 1:ticketId, 2:campaignAddress, 3:side, 4:stake, 5:campaignName, 6:campaignId]
+  if (parts.length < 7) return; // Verify we have all 7 parts
 
-    const ticketUid = parts[0];
-    const ticketId = Number(parts[1]);
-    const campaignAddress = parts[2];
-    const side = parts[3] === "1" || parts[3] === "true"; 
-    const stake = parts[4] ? parseFloat(parts[4]) : 0;
-    const campaignName = parts[5]; // <--- This will now have the name from props
+  const ticketUid = parts[0];
+  const ticketId = Number(parts[1]);
+  const campaignAddress = parts[2];
+  const side = parts[3] === "1" || parts[3] === "true"; 
+  const stake = parts[4] ? parseFloat(parts[4]) : 0;
+  const campaignName = parts[5];
+  const campaignId = Number(parts[6]); // <--- Now campaignId is defined in scope
 
-    if (placed.some((b) => b.ticketUid === ticketUid)) return;
+  if (placed.some((b) => b.ticketUid === ticketUid)) return;
 
   const bet: PlacedBet = {
-      id: uid(),
-      zoneId: zone.id,
-      ticketUid,
-      ticketId,
-      campaignAddress,
-      campaignName, 
-      // Cast the zone's specific string type to the general BetTypeKey
-      betType: zone.betType as BetTypeKey, 
-      numbers: zone.numbers,
-      param: zone.param,
-      side,
-      stake
-    };
+    id: uid(),
+    zoneId: zone.id,
+    ticketUid,
+    ticketId,
+    campaignId, // Shorthand now works because the variable exists above
+    campaignAddress,
+    campaignName, 
+    betType: zone.betType as BetTypeKey, 
+    numbers: zone.numbers,
+    param: zone.param,
+    side,
+    stake
+  };
 
-    setPlaced((prev) => [...prev, bet]);
-    removeTicketFromTray(ticketUid);
-    setHoverZone(null);
-  }
+  setPlaced((prev) => [...prev, bet]);
+  removeTicketFromTray(ticketUid);
+  setHoverZone(null);
+}
   function clearAll() {
     onClearAll(placed); // Restores to tray via parent logic
     setPlaced([]);
@@ -160,39 +162,40 @@ export default function RouletteTable({
   const [isProcessing, setIsProcessing] = React.useState(false);
 
   async function handleConfirm() {
-    if (placed.length === 0 || !address) return;
-    setIsProcessing(true);
+  if (placed.length === 0 || !address) return;
+  setIsProcessing(true);
 
-    try {
-      // 1. Gather unique campaigns for approval check
-      const uniqueCampaigns = Array.from(
-        new Set(placed.map((b) => b.campaignAddress as `0x${string}`))
-      );
+  // We create an array to keep track of bets that actually succeeded on-chain
+  const successfulBets: PlacedBet[] = [];
 
-      // 2. Step 1: Sequential NFT Approvals
-      for (const campaign of uniqueCampaigns) {
-        const isApproved = await readContract(config, {
+  try {
+    // 1. Step 1: Sequential NFT Approvals (Same as before)
+    const uniqueCampaigns = Array.from(
+      new Set(placed.map((b) => b.campaignAddress as `0x${string}`))
+    );
+
+    for (const campaign of uniqueCampaigns) {
+      const isApproved = await readContract(config, {
+        address: campaign,
+        abi: ERC721_ABI,
+        functionName: "isApprovedForAll",
+        args: [address, ROULETTE_CONTRACT_ADDRESS as `0x${string}`],
+      });
+
+      if (!isApproved) {
+        const hash = await writeContractAsync({
           address: campaign,
           abi: ERC721_ABI,
-          functionName: "isApprovedForAll",
-          args: [address, ROULETTE_CONTRACT_ADDRESS as `0x${string}`],
+          functionName: "setApprovalForAll",
+          args: [ROULETTE_CONTRACT_ADDRESS as `0x${string}`, true],
         });
-
-        if (!isApproved) {
-          const hash = await writeContractAsync({
-            address: campaign,
-            abi: ERC721_ABI,
-            functionName: "setApprovalForAll",
-            args: [ROULETTE_CONTRACT_ADDRESS as `0x${string}`, true],
-          });
-          // Wait for block confirmation
-          await publicClient?.waitForTransactionReceipt({ hash });
-        }
+        await publicClient?.waitForTransactionReceipt({ hash });
       }
+    }
 
-      // 3. Step 2: Sequential Bet Placement
-      // We loop using for...of to ensure 'await' pauses the loop correctly
-      for (const bet of placed) {
+    // 2. Step 2: Sequential Bet Placement with Individual Error Handling
+    for (const bet of placed) {
+      try {
         console.log(`Submitting Bet for Ticket #${bet.ticketId}...`);
         
         const hash = await writeContractAsync({
@@ -202,43 +205,64 @@ export default function RouletteTable({
           args: [
             bet.campaignAddress as `0x${string}`,
             BigInt(bet.ticketId),
-            Number(BET_TYPE_MAP[bet.betType]), // Cast to Number (uint8)
-            bet.numbers || [],                 // Ensure numbers is never null
-            Number(bet.param),                 // Cast to Number (uint8)
+            Number(BET_TYPE_MAP[bet.betType]),
+            bet.numbers || [],
+            Number(bet.param),
           ],
         });
 
-        // CRITICAL: Wait for the bet to be mined before sending the next one
-        // This prevents 'nonReentrant' reverts and nonce collisions
         await publicClient?.waitForTransactionReceipt({ hash });
+        
+        // IF WE REACH HERE, THE TRANSACTION SUCCEEDED
+        successfulBets.push(bet); 
         console.log(`Bet for Ticket #${bet.ticketId} Confirmed!`);
+
+      } catch (betError) {
+        // If one bet fails, we log it but KEEP LOOPING for the others
+        console.error(`Failed to place bet for Ticket #${bet.ticketId}:`, betError);
+        // Optional: Break here if you want to stop after the first failure 
+        // but still sync the ones that worked before it.
+        break; 
       }
-
-      alert("Success! All bets have been placed on the blockchain.");
-      setPlaced([]);
-   } catch (err: unknown) { 
-  // 1. Cast the unknown error to our custom interface
-  const error = err as WagmiError;
-  console.error("Betting Flow Error:", error);
-  
-  // 2. Use 'error' instead of 'err' for all properties
-  const revertReason = error.walk?.((e) => e.data?.message || e.message);
-  
-  if (revertReason?.includes("campaign not allowed")) {
-    alert("Error: This market collection is not whitelisted for the Roulette.");
-  } 
-  // Fixed: Changed 'err' to 'error' here
-  else if (error.name === 'UserRejectedRequestError' || error.message.includes("rejected")) {
-    alert("Transaction cancelled by user.");
-  } 
-  else {
-    alert(`Error: ${revertReason || "The transaction reverted. Check your balance or if the round is closed."}`);
-  }
-
-    } finally {
-      setIsProcessing(false);
     }
+
+    // 3. Step 3: Synchronize ONLY successful bets with Backend
+    if (successfulBets.length > 0) {
+      console.log(`Syncing ${successfulBets.length} successful bets to backend...`);
+      const apiPayload = {
+        user_address: address,
+        bets: successfulBets.map((bet) => ({
+          campaign_id: bet.campaignId,
+          ticket_id: bet.ticketId,
+          bet_type: BET_TYPE_MAP[bet.betType],
+          numbers: bet.numbers || [],
+          param: Number(bet.param),
+          stake: Number(bet.stake),
+          zone_id: bet.zoneId
+        }))
+      };
+
+      await api.post("/roulette/bets", apiPayload);
+      
+      // Update UI: Remove only the successful ones from the table
+      const successfulUids = successfulBets.map(b => b.ticketUid);
+      setPlaced(prev => prev.filter(p => !successfulUids.includes(p.ticketUid)));
+
+      if (successfulBets.length === placed.length) {
+        alert("Success! All bets placed and synced.");
+      } else {
+        alert(`Partial Success: ${successfulBets.length} bets placed. Others failed or were cancelled.`);
+      }
+    }
+
+  } catch (err: unknown) { 
+    const error = err as WagmiError;
+    const revertReason = error.walk?.((e) => (e as any).data?.message || (e as any).message);
+    alert(`Error during process: ${revertReason || "Check console for details."}`);
+  } finally {
+    setIsProcessing(false);
   }
+}
   return (
    <div className={`w-full pt-12 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
     <div className="relative w-full border border-white/10 bg-black/40 rounded-none md:rounded-2xl shadow-2xl">
