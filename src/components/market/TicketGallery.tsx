@@ -51,117 +51,126 @@ export default function TicketGallery({
   const isResolved = marketState === 1;
 
   /* ---------------------- LOAD FUNCTION ---------------------- */
-  const load = useCallback(async () => {
-    if (!address) return;
-    setLoading(true);
+  /* ---------------------- LOAD FUNCTION ---------------------- */
+const load = useCallback(async () => {
+  if (!address) return;
+  setLoading(true);
 
+  try {
+    // 1. Fetch Backend Tickets
+    const token = localStorage.getItem("access_token");
+    let backendTickets: BackendBet[] = [];
+    
     try {
-        // 1. Fetch Backend Tickets First (Source of Truth for IDs)
-        const token = localStorage.getItem("access_token");
-        let backendTickets: BackendBet[] = [];
-        
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const json = await res.json();
-            backendTickets = json.bets.filter(
-                (b: BackendBet) => b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
-            );
-        } catch (err) {
-            console.error("Backend fetch error:", err);
-        }
-
-        if (backendTickets.length === 0) {
-            setTickets([]);
-            setLoading(false);
-            return;
-        }
-
-        // 2. RPC Connection
-        const provider = new JsonRpcProvider(CHAIN.rpcUrl);
-        const contract = new Contract(campaignAddress, BetCampaignABI, provider);
-
-        // 3. Batch Global Data
-        const [outcome, totalTrue, totalFalse, totalInitialPot, feeBps] = await Promise.all([
-            contract.outcomeTrue(),
-            contract.totalTrue().then((n: bigint) => Number(n)/1e6),
-            contract.totalFalse().then((n: bigint) => Number(n)/1e6),
-            contract.totalInitialPot().then((n: bigint) => Number(n)/1e6),
-            contract.feeBps().then((n: bigint) => Number(n)),
-        ]);
-
-        const pool = totalTrue + totalFalse + totalInitialPot;
-        const fee = (pool * feeBps) / 10000;
-        const distributable = pool - fee;
-
-        const result: GalleryTicket[] = [];
-
-        // 4. Iterate ONLY known backend IDs (Throttled)
-        for (let i = 0; i < backendTickets.length; i++) {
-            const bTicket = backendTickets[i];
-            
-            // Rate limiter: 50ms delay every 5 calls
-            if (i > 0 && i % 5 === 0) await delay(50);
-
-            try {
-                // Try to get on-chain state
-                const t = await contract.tickets(bTicket.ticket_id);
-                const stake = Number(t.stake) / 1e6;
-                const rawSide = t.side; 
-                const side = rawSide ? 0 : 1; // 0=YES, 1=NO
-                
-                let won = false;
-                let pnl = 0;
-
-                if (isResolved) {
-                    won = outcome ? side === 0 : side === 1;
-                    if (won) {
-                        const winnersTotal = outcome ? totalTrue : totalFalse;
-                        pnl = winnersTotal > 0 ? (stake / winnersTotal) * distributable : 0;
-                    } else {
-                        pnl = -stake;
-                    }
-                } else {
-                    const sideTotal = side === 0 ? totalTrue : totalFalse;
-                    pnl = sideTotal > 0 ? (stake / sideTotal) * distributable : stake;
-                }
-
-                result.push({
-                    id: bTicket.ticket_id,
-                    side,
-                    stake,
-                    claimed: t.claimed,
-                    won,
-                    pnl,
-                    imageUrl: t.claimed ? "/monadice_burned.png" : `/monadice${Math.min(bTicket.ticket_id, 6)}.png`,
-                    burned: t.claimed,
-                });
-            } catch {
-                // REMOVED UNUSED 'err' variable here
-                // Fallback to backend data if on-chain read fails
-                result.push({
-                    id: bTicket.ticket_id,
-                    side: bTicket.side ? 0 : 1,
-                    stake: bTicket.stake,
-                    claimed: bTicket.claimed,
-                    won: bTicket.payout !== null && bTicket.payout > 0,
-                    pnl: bTicket.payout ?? -bTicket.stake,
-                    imageUrl: "/monadice_burned.png",
-                    burned: true
-                });
-            }
-        }
-        
-        setTickets(result);
-
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bet/me/user-bets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      backendTickets = json.bets.filter(
+        (b: BackendBet) => b.campaign_address.toLowerCase() === campaignAddress.toLowerCase()
+      );
     } catch (err) {
-        console.error("Gallery Error:", err);
-    } finally {
-        setLoading(false);
+      console.error("Backend fetch error:", err);
     }
-  }, [address, campaignAddress, isResolved]);
 
+    if (backendTickets.length === 0) {
+      setTickets([]);
+      setLoading(false);
+      return;
+    }
+
+    // 2. RPC Connection
+    const provider = new JsonRpcProvider(CHAIN.rpcUrl);
+    const contract = new Contract(campaignAddress, BetCampaignABI, provider);
+
+    // 3. Batch Global Data
+    const [outcome, totalTrue, totalFalse, totalInitialPot, feeBps] = await Promise.all([
+      contract.outcomeTrue(),
+      contract.totalTrue().then((n: bigint) => Number(n)/1e6),
+      contract.totalFalse().then((n: bigint) => Number(n)/1e6),
+      contract.totalInitialPot().then((n: bigint) => Number(n)/1e6),
+      contract.feeBps().then((n: bigint) => Number(n)),
+    ]);
+
+    const pool = totalTrue + totalFalse + totalInitialPot;
+    const fee = (pool * feeBps) / 10000;
+    const distributable = pool - fee;
+
+    const result: GalleryTicket[] = [];
+
+    // 4. Iterate IDs
+    for (let i = 0; i < backendTickets.length; i++) {
+      const bTicket = backendTickets[i];
+      if (i > 0 && i % 5 === 0) await delay(50);
+
+      try {
+        const t = await contract.tickets(bTicket.ticket_id);
+        const stake = Number(t.stake) / 1e6;
+        
+        /**
+         * LOGIC MAPPING:
+         * Contract Side: 0 = FalseSide (NO), 1 = TrueSide (YES)
+         * UI Side: 0 = YES, 1 = NO
+         */
+        const side = Number(t.side) === 1 ? 0 : 1; 
+        
+        let won = false;
+        let pnl = 0;
+
+        if (isResolved) {
+          // If outcome is true, UI side 0 (YES) wins.
+          won = outcome ? side === 0 : side === 1;
+          
+          if (won) {
+            const winnersTotal = outcome ? totalTrue : totalFalse;
+            pnl = winnersTotal > 0 ? (stake / winnersTotal) * distributable : 0;
+          } else {
+            pnl = -stake;
+          }
+        } else {
+          const sideTotal = side === 0 ? totalTrue : totalFalse;
+          pnl = sideTotal > 0 ? (stake / sideTotal) * distributable : stake;
+        }
+
+        result.push({
+          id: bTicket.ticket_id,
+          side,
+          stake,
+          claimed: t.claimed,
+          won,
+          pnl,
+          imageUrl: t.claimed ? "/monadice_burned.png" : `/monadice${Math.min(bTicket.ticket_id % 6, 6)}.png`,
+          burned: t.claimed,
+        });
+      } catch (err) {
+        // Fallback to backend data (ensure mapping is identical here)
+        const side = bTicket.side ? 0 : 1; // Backend true -> YES (0)
+        let won = false;
+        if (isResolved) {
+           won = outcome ? side === 0 : side === 1;
+        }
+
+        result.push({
+          id: bTicket.ticket_id,
+          side,
+          stake: bTicket.stake,
+          claimed: bTicket.claimed,
+          won: won, // Correctly calculate win state for fallback
+          pnl: bTicket.payout ?? -bTicket.stake,
+          imageUrl: bTicket.claimed ? "/monadice_burned.png" : "/monadice_fallback.png",
+          burned: bTicket.claimed
+        });
+      }
+    }
+    
+    setTickets(result);
+
+  } catch (err) {
+    console.error("Gallery Error:", err);
+  } finally {
+    setLoading(false);
+  }
+}, [address, campaignAddress, isResolved]);
   useEffect(() => {
     if (!address) {
       setTickets([]);

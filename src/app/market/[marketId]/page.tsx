@@ -322,9 +322,11 @@ export default function MarketPage() {
                       />
                     ) : (
                       <ClaimView
-                        campaignAddress={campaign.campaign_address as `0x${string}`}
-                        endTime={campaign.end_time}
-                      />
+  campaignAddress={campaign.campaign_address as `0x${string}`}
+  endTime={campaign.end_time}
+  isResolvedBackend={campaign.resolved} // New Prop
+  outcomeBackend={campaign.outcome_true} // New Prop
+/>
                     )}
                   </div>
                 </div>

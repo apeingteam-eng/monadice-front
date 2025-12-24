@@ -10,8 +10,8 @@ import { useAccount, useWriteContract } from "wagmi";
 /* ------------------------------- Types ------------------------------- */
 type Ticket = {
   id: number;
-  side: number; // 0 or 1
-  stake: number; // in USDC (already /1e6)
+  side: number; // 0 for YES, 1 for NO
+  stake: number; // in USDC
   claimed: boolean;
 };
 
@@ -24,16 +24,19 @@ type BackendBet = {
 
 type ClaimViewProps = {
   campaignAddress: `0x${string}`;
-  endTime: number; // unix seconds
+  endTime: number;
+  isResolvedBackend: boolean;
+  outcomeBackend: number;
 };
 
-// Helper to prevent RPC throttling
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 /* --------------------------- Main Component --------------------------- */
 export default function ClaimView({
   campaignAddress,
   endTime,
+  isResolvedBackend,
+  outcomeBackend,
 }: ClaimViewProps) {
   const { address } = useAccount();
 
@@ -49,10 +52,20 @@ export default function ClaimView({
   const [state, setState] = useState<number | null>(null);
   const [outcomeTrue, setOutcomeTrue] = useState<boolean | null>(null);
 
-  // Removed unused 'tickets' state
   const [winningTickets, setWinningTickets] = useState<Ticket[]>([]);
   const [totalPayout, setTotalPayout] = useState<number>(0);
   const [claiming, setClaiming] = useState(false);
+
+  // --- CONSOLIDATED LOGIC FOR UI ---
+  const now = Math.floor(Date.now() / 1000);
+  // Use backend status as priority source of truth
+  const isResolved = isResolvedBackend || state === 1;
+  const finalOutcomeTrue = isResolvedBackend ? (outcomeBackend === 1) : outcomeTrue;
+
+  const isEndedByTime = endTime <= now;
+  const isPending = !isResolved && isEndedByTime;
+  const isRunning = !isResolved && !isEndedByTime;
+  const isCancelled = state === 2;
 
   /* --------------------------- Load Function --------------------------- */
   const loadAll = useCallback(async () => {
@@ -79,7 +92,6 @@ export default function ClaimView({
         setBackendBets(backend);
         setJoined(backend.length > 0);
 
-        // Calculate total previously claimed from backend
         const backendClaims = backend.filter((b) => b.claimed);
         const totalClaimFromBackend = backendClaims.reduce(
           (sum, b) => sum + (b.payout || 0),
@@ -94,7 +106,7 @@ export default function ClaimView({
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
       const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-      // 3. Fetch Global Campaign Data (Single RPC calls)
+      // 3. Fetch Global Campaign Data
       const [s, outcome, totalTrue, totalFalse, totalInitialPot, feeBps] = await Promise.all([
         contract.state(),
         contract.outcomeTrue(),
@@ -114,24 +126,21 @@ export default function ClaimView({
       setState(Number(s));
       setOutcomeTrue(outcome);
 
-      // 4. Fetch User Tickets Optimized
+      // 4. Fetch User Tickets Optimized with Individual try/catch to avoid CALL_EXCEPTION crashes
       const owned: Ticket[] = [];
       
       for (let i = 0; i < backend.length; i++) {
         const bet = backend[i];
-        
-        // Rate limit protection
         if (i > 0 && i % 5 === 0) await delay(50);
 
         try {
-          // Verify ownership on-chain
           const owner = await contract.ownerOf(bet.ticket_id);
           if (owner.toLowerCase() !== address.toLowerCase()) continue;
 
-          // Fetch latest ticket state
           const t = await contract.tickets(bet.ticket_id);
-          const rawSide = t.side;
-          const side = rawSide ? 0 : 1; 
+          
+          // LOGIC FIX: Contract Side { FalseSide, TrueSide }. 1 (True) = YES (0) in UI
+          const side = Number(t.side) === 1 ? 0 : 1; 
 
           owned.push({
             id: Number(t.id),
@@ -140,23 +149,20 @@ export default function ClaimView({
             claimed: t.claimed,
           });
         } catch (e) {
-          console.warn(`Error loading ticket ${bet.ticket_id}`, e);
+          console.warn(`Ticket #${bet.ticket_id} fetch failed (possibly burned or invalid ID).`, e);
         }
       }
 
-      // Removed unnecessary setTickets(owned);
-
-      // 5. Calculate Winnings (Only if Resolved)
-      if (Number(s) === 1) {
+      // 5. Calculate Winnings
+      if (isResolved) {
         const winners = owned.filter((t) => {
-          const didWin = outcome ? t.side === 0 : t.side === 1;
+          const didWin = finalOutcomeTrue ? t.side === 0 : t.side === 1;
           return !t.claimed && didWin;
         });
-
         setWinningTickets(winners);
 
         let total = 0;
-        const winnersTot = outcome
+        const winnersTot = finalOutcomeTrue
           ? Number(totalTrue) / 1e6
           : Number(totalFalse) / 1e6;
 
@@ -176,7 +182,7 @@ export default function ClaimView({
     } finally {
       setLoading(false);
     }
-  }, [address, campaignAddress, toast]); // endTime is strictly for render logic, mostly
+  }, [address, campaignAddress, toast, isResolved, finalOutcomeTrue]);
 
   /* --------------------------- Effect --------------------------- */
   useEffect(() => {
@@ -196,7 +202,6 @@ export default function ClaimView({
       const provider = new JsonRpcProvider(CHAIN.rpcUrl);
       const contract = new Contract(campaignAddress, BetCampaignABI, provider);
 
-      // Fetch fresh totals
       const [totalTrue, totalFalse, totalInitialPot, feeBps, outcome] = await Promise.all([
         contract.totalTrue().then((n: bigint) => Number(n) / 1e6),
         contract.totalFalse().then((n: bigint) => Number(n) / 1e6),
@@ -223,12 +228,8 @@ export default function ClaimView({
           });
         } catch (err: unknown) {
             let msg = "Transaction failed.";
-            if (err instanceof Error) {
-                msg = err.message;
-            } else if (typeof err === "string") {
-                msg = err;
-            }
-
+            if (err instanceof Error) msg = err.message;
+            
             if (msg.includes("User rejected") || msg.includes("User denied")) {
                 toast.error("Transaction cancelled.");
             } else {
@@ -246,10 +247,8 @@ export default function ClaimView({
           continue;
         }
 
-        // Payout for backend record
         const payout = winnersTot > 0 ? (t.stake * distributable) / winnersTot : 0;
 
-        // Save to backend
         try {
           const token = localStorage.getItem("access_token");
           await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bet/claim`, {
@@ -272,7 +271,7 @@ export default function ClaimView({
       }
 
       toast.success("All winning tickets claimed!");
-      loadAll(); // refresh UI
+      loadAll();
     } catch (err) {
       console.error(err);
       toast.error("Claim sequence failed.");
@@ -299,20 +298,13 @@ export default function ClaimView({
     );
   }
 
-  if (state === null || outcomeTrue === null) {
+  if (state === null) {
     return (
       <div className="border border-neutral-700 bg-neutral-900 p-4 rounded-lg">
         <p className="text-neutral-400">Unable to load market state. Refresh.</p>
       </div>
     );
   }
-
-  const now = Math.floor(Date.now() / 1000);
-  const isEndedByTime = endTime <= now;
-  const isRunning = Number(state) === 0 && !isEndedByTime;
-  const isPending = Number(state) === 0 && isEndedByTime;
-  const isCancelled = Number(state) === 2;
-  const isResolved = Number(state) === 1;
 
   if (!joined) {
     return (
@@ -350,23 +342,20 @@ export default function ClaimView({
     return <div className="p-4 text-neutral-400 bg-neutral-900 rounded-lg">Loading result...</div>;
   }
 
-  /* --- Logic for Partial Claims --- */
   const backendClaims = backendBets.filter((b) => b.claimed);
   const unclaimedWins = winningTickets.filter((t) => 
      !backendClaims.some(b => b.ticket_id === t.id)
   );
   
-  // Case: User won, but has mixed status (some claimed, some not)
   if (backendClaims.length > 0 && unclaimedWins.length > 0) {
     const remainingPayout = totalPayout; 
-    const claimedPayout = claimedAmount;
-    const totalCombined = claimedPayout + remainingPayout;
+    const totalCombined = claimedAmount + remainingPayout;
 
     return (
       <div className="border border-accentPurple/40 bg-accentPurple/5 p-5 rounded-lg space-y-4 shadow-lg shadow-accentPurple/5">
         <h3 className="text-accentPurple text-lg font-bold">Unclaimed Rewards Found</h3>
         <div className="text-sm text-neutral-300 space-y-1">
-          <p>Already Claimed: <span className="text-green-400 font-mono">${claimedPayout.toFixed(2)}</span></p>
+          <p>Already Claimed: <span className="text-green-400 font-mono">${claimedAmount.toFixed(2)}</span></p>
           <p>Remaining: <span className="text-accentPurple font-mono font-bold">${remainingPayout.toFixed(2)}</span></p>
           <p className="pt-2 border-t border-white/5 mt-2">Total Earnings: <span className="text-white font-bold">${totalCombined.toFixed(2)}</span></p>
         </div>
@@ -381,7 +370,6 @@ export default function ClaimView({
     );
   }
 
-  // Case: All wins already claimed
   if (backendClaims.length > 0 && winningTickets.length === 0) {
     return (
       <div className="border border-green-500/30 bg-green-500/5 p-5 rounded-lg space-y-2">
@@ -389,14 +377,13 @@ export default function ClaimView({
         <p className="text-sm text-neutral-400">
            Total Payout: <span className="text-white font-bold">${claimedAmount.toFixed(2)}</span>
         </p>
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-500 truncate">
            Tickets: {backendClaims.map(b => `#${b.ticket_id}`).join(", ")}
         </p>
       </div>
     );
   }
 
-  // Case: Nothing to claim (Lost)
   if (winningTickets.length === 0) {
     return (
       <div className="border border-red-500/20 bg-red-900/10 p-4 rounded-lg text-center">
@@ -406,7 +393,6 @@ export default function ClaimView({
     );
   }
 
-  // Case: Has wins, none claimed yet
   return (
     <div className="border border-accentPurple/40 bg-accentPurple/5 p-5 rounded-lg space-y-4 shadow-lg shadow-accentPurple/5">
       <h3 className="text-accentPurple text-lg font-bold flex items-center gap-2">
