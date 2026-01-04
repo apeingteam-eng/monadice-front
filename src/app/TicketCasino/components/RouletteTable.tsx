@@ -16,7 +16,7 @@ interface WagmiError extends Error {
   walk?: (fn: (e: { data?: { message?: string }; message: string }) => string | undefined) => string | undefined;
 }
 // --- CONTRACT CONSTANTS ---
-const ROULETTE_CONTRACT_ADDRESS = "0xdbb5075bc89d97C548048BaA6Fb59aFd6508cA59";
+const ROULETTE_CONTRACT_ADDRESS = "0x030607b8F354C2f78575ED777ba3B57Fa96c19e8";
 
 // --- CONTRACT ENUM MAPPING ---
 const BET_TYPE_MAP: Record<string, number> = {
