@@ -21,7 +21,7 @@ interface WagmiError extends Error {
 }
 
 const ROULETTE_CONTRACT_ADDRESS =
-  "0x0aa36f36F34A8adD3B3cCF78DEe1D020ae606eE8";
+  "0xE1E076327C3C02127f26A73df6b6908eCC0Fa6BC";
 
 const BET_TYPE_MAP: Record<string, number> = {
   STRAIGHT: 0,
