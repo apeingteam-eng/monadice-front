@@ -63,7 +63,7 @@ const ROULETTE_ABI = [
   {
     name: "placeBet",
     type: "function",
-    stateMutability: "nonReentrant",
+    stateMutability: "nonpayable",
     inputs: [
       { name: "campaign", type: "address" },
       { name: "ticketId", type: "uint256" },
