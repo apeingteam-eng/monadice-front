@@ -42,8 +42,12 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
     const [loading, setLoading] = useState(false);
 
     // Derived
-    const isNative = betToken.toLowerCase() === ZERO_ADDRESS.toLowerCase();
+    const isNative = !betToken || betToken === ZERO_ADDRESS || betToken.toLowerCase() === ZERO_ADDRESS.toLowerCase() || /^0x0+$/.test(betToken);
     const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+
+    useEffect(() => {
+        console.log("BlitzJoinForm Debug:", { betToken, isNative, ZERO_ADDRESS });
+    }, [betToken, isNative]);
 
     /* ------------------------------------------------------------
        HANDLERS
@@ -97,6 +101,12 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
 
             // If native, send value. If ERC20, value is 0.
             const txOverrides = isNative ? { value: parsedAmount } : {};
+
+            /* DEBUG START */
+            /*
+            toast.info(`Debug: Token=${betToken.slice(0,6)} isNative=${isNative} Val=${isNative ? amount : 0}`);
+            */
+            /* DEBUG END */
 
             // Contract function: join(outcome, amount)
             const tx = await campaignContract.join(
