@@ -111,7 +111,7 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
             // Use sendTransaction to explicitly control value preventing Ethers v6 value drop issues
             const txData = campaignContract.interface.encodeFunctionData("join", [
                 selectedOutcomeIndex,
-                parsedAmount
+                isNative ? 0 : parsedAmount
             ]);
 
             const tx = await signer.sendTransaction({
