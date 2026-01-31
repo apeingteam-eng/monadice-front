@@ -46,8 +46,15 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
     const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
     useEffect(() => {
-        console.log("BlitzJoinForm Debug:", { betToken, isNative, ZERO_ADDRESS });
+        console.log("DEBUG NATIVE CHECK:", {
+            betToken,
+            isNative,
+            ZERO_ADDRESS,
+            match: betToken === ZERO_ADDRESS
+        });
+        // alert(`DEBUG: Token=${betToken} Native=${isNative}`); // Force user to see it
     }, [betToken, isNative]);
+
 
     /* ------------------------------------------------------------
        HANDLERS

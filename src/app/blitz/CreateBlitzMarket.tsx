@@ -171,7 +171,7 @@ export default function CreateBlitzMarket({ onSuccess }: Props) {
         return;
       }
 
-      console.log("Deployed Campaign:", campaignAddress);
+      // console.log("Deployed Campaign:", campaignAddress);
       toast.success("Market deployed on-chain.");
 
       /* ---------------- BACKEND API ---------------- */
