@@ -25,9 +25,100 @@ type Props = {
 // ... (Spinner code)
 
 export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bettingClosed, permissioned = false, onJoinSuccess }: Props) {
-    // ... (rest of component hooks)
+    const { address, isConnected } = useAccount();
+    const { data: walletClient } = useWalletClient();
+    const chainId = useChainId();
+    const toast = useToast();
 
-    // ... (handlePlaceBet)
+    // State
+    const [selectedOutcomeIndex, setSelectedOutcomeIndex] = useState<number>(0);
+    const [amount, setAmount] = useState<string>("");
+    const [loading, setLoading] = useState(false);
+
+    // Derived
+    const isNative = betToken === ZERO_ADDRESS;
+    const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+
+    /* ------------------------------------------------------------
+       HANDLERS
+    ------------------------------------------------------------ */
+    const handlePlaceBet = async () => {
+        if (!isConnected || !address || !walletClient) {
+            toast.error("Please connect your wallet first.");
+            return;
+        }
+
+        if (chainId !== TARGET_CHAIN_ID) {
+            toast.error(`Wrong network. Please switch to Monad Testnet.`);
+            return;
+        }
+
+        if (!amount || Number(amount) <= 0) {
+            toast.error("Please enter a valid amount.");
+            return;
+        }
+
+        // Check whitelist if permissioned
+        /* 
+        // Logic for whitelist check if needed, but handled by contract revert usually
+        if (permissioned) { ... }
+        */
+
+        setLoading(true);
+
+        try {
+            const provider = new BrowserProvider(walletClient.transport as Eip1193Provider);
+            const signer = await provider.getSigner(address);
+            const campaignContract = new Contract(campaignAddress, BlitzBetCampaignABI, signer);
+
+            const parsedAmount = parseUnits(amount, 18); // Assume 18 decimals for now
+
+            // 1. APPROVAL (Only if NOT Native)
+            if (!isNative) {
+                const tokenContract = new Contract(betToken, ERC20ABI, signer);
+                // Check allowance
+                const allowance = await tokenContract.allowance(address, campaignAddress);
+                if (allowance < parsedAmount) {
+                    toast.info("Approving token...");
+                    const txApprove = await tokenContract.approve(campaignAddress, parsedAmount);
+                    await txApprove.wait();
+                    toast.success("Approved!");
+                }
+            }
+
+            // 2. JOIN
+            toast.info("Placing bet...");
+
+            // If native, send value. If ERC20, value is 0.
+            const txOverrides = isNative ? { value: parsedAmount } : {};
+
+            // Contract function: join(outcome, amount)
+            const tx = await campaignContract.join(
+                selectedOutcomeIndex,
+                parsedAmount,
+                txOverrides
+            );
+
+            const receipt = await tx.wait();
+
+            if (!receipt || receipt.status !== 1) {
+                throw new Error("Transaction failed on-chain.");
+            }
+
+            await handleSuccess(tx.hash, provider, campaignContract);
+
+        } catch (err: any) {
+            console.error("Bet Error:", err);
+            const isRejected = err.code === "ACTION_REJECTED" || err.info?.error?.code === 4001 || err.message?.includes("user denied");
+            if (isRejected) {
+                toast.error("Transaction cancelled.");
+            } else {
+                toast.error(err.reason || err.message || "Failed to place bet.");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSuccess = async (txHash: string, provider: any, campaignContract: any) => {
         // ... (existing log parsing logic)
