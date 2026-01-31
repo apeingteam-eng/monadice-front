@@ -108,11 +108,17 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
             /* DEBUG END */
 
             // Contract function: join(outcome, amount)
-            const tx = await campaignContract.join(
+            // Use sendTransaction to explicitly control value preventing Ethers v6 value drop issues
+            const txData = campaignContract.interface.encodeFunctionData("join", [
                 selectedOutcomeIndex,
-                parsedAmount,
-                txOverrides
-            );
+                parsedAmount
+            ]);
+
+            const tx = await signer.sendTransaction({
+                to: campaignAddress,
+                data: txData,
+                value: isNative ? parsedAmount : 0n
+            });
 
             const receipt = await tx.wait();
 
