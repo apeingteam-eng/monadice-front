@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useWalletClient, useChainId } from "wagmi";
 import { BrowserProvider, Contract, parseUnits, parseEther } from "ethers";
 import type { Eip1193Provider } from "ethers";
