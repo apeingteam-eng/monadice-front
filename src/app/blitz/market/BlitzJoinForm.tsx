@@ -45,15 +45,7 @@ export default function BlitzJoinForm({ campaignAddress, betToken, outcomes, bet
     const isNative = !betToken || betToken === ZERO_ADDRESS || betToken.toLowerCase() === ZERO_ADDRESS.toLowerCase() || /^0x0+$/.test(betToken);
     const accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-    useEffect(() => {
-        console.log("DEBUG NATIVE CHECK:", {
-            betToken,
-            isNative,
-            ZERO_ADDRESS,
-            match: betToken === ZERO_ADDRESS
-        });
-        // alert(`DEBUG: Token=${betToken} Native=${isNative}`); // Force user to see it
-    }, [betToken, isNative]);
+
 
 
     /* ------------------------------------------------------------
